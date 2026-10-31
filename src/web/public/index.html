@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DJ Tilin — Dashboard</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="hero">
+  <img src="/assets/tilines-community-banner.jpg" class="banner" alt="TILINES Community">
+  <div class="brand">
+    <img src="/assets/tilinbot-avatar.jpg" class="avatar" alt="DJ Tilin">
+    <div><h1>DJ Tilin</h1><p>Música y mezclas • TILINES Community</p></div>
+  </div>
+</header>
+<main>
+  <section id="login" class="card">
+    <h2>Bienvenido</h2>
+    <p>Inicia sesión con Discord para configurar la música.</p>
+    <a class="button" href="/auth/discord">Entrar con Discord</a>
+  </section>
+
+  <section id="dashboard" hidden>
+    <section class="card" aria-labelledby="mix-heading">
+      <h2 id="mix-heading">🎚️ AutoMix · Mezclador musical</h2>
+      <p>Une tus canciones con transiciones suaves. Smart Mix busca puntos adecuados; DJ intenta alinear los ritmos y conserva el tono. Si no encuentra una mezcla fiable, usa un fundido sencillo.</p>
+      <div class="grid two">
+        <label>Modo de reproducción
+          <select id="mix_mode">
+            <option value="normal">Normal — canciones completas, sin solaparlas</option>
+            <option value="crossfade">Crossfade — fundido cruzado</option>
+            <option value="smart">Smart Mix — transición inteligente</option>
+            <option value="dj">DJ automático — sincronizar ritmos compatibles</option>
+          </select>
+        </label>
+        <label>Duración del fundido: <output id="mix_seconds_value" for="mix_seconds">6</output> segundos
+          <input id="mix_seconds" type="range" min="3" max="15" step="1" value="6">
+        </label>
+      </div>
+      <label><input id="mix_sync" type="checkbox" checked> Sincronizar BPM cuando el ritmo sea claro</label>
+      <label><input id="mix_normalize" type="checkbox" checked> Equilibrar el volumen entre canciones</label>
+      <button class="button" id="mix_save" type="button">Guardar AutoMix</button>
+      <button class="button secondary" id="mix_refresh" type="button">Actualizar estado</button>
+      <p id="mix_status" role="status" aria-live="polite">Cargando ajustes…</p>
+      <small>La configuración se guarda para los próximos cambios de canción y reinicios. También puedes usar /automix en Discord.</small>
+    </section>
+  </section>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>

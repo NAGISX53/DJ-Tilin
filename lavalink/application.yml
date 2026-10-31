@@ -1,0 +1,62 @@
+server:
+  port: 2333
+  address: 0.0.0.0
+
+lavalink:
+  plugins:
+    - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.2"
+    - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.8.3"
+  server:
+    opusEncodingQuality: 10
+    resamplingQuality: HIGH
+    password: "${LAVALINK_PASSWORD:youshallnotpass}"
+    sources:
+      youtube: false
+      soundcloud: true
+      bandcamp: true
+      twitch: true
+      vimeo: true
+      http: false
+      local: true
+    filters:
+      volume: true
+      equalizer: true
+      karaoke: true
+      timescale: true
+      tremolo: true
+      vibrato: true
+      distortion: true
+      rotation: true
+      channelMix: true
+      lowPass: true
+
+plugins:
+  youtube:
+    enabled: false
+    allowSearch: true
+    allowDirectVideoIds: false
+    allowDirectPlaylistIds: false
+    clients: [MUSIC, ANDROID_VR, WEB, WEBEMBEDDED]
+  lavasrc:
+    providers:
+      - 'ytsearch:"%ISRC%"'
+      - "ytsearch:%QUERY%"
+    sources:
+      spotify: true
+      applemusic: false
+      deezer: false
+      yandexmusic: false
+      flowerytts: false
+      youtube: false
+      ytdlp: true
+    ytdlp:
+      path: "../runtime/yt-dlp.exe"
+      searchLimit: 5
+      mixPlaylistLoadLimit: 25
+      playlistLoadLimit: 200
+    spotify:
+      clientId: "${SPOTIFY_CLIENT_ID:}"
+      clientSecret: "${SPOTIFY_CLIENT_SECRET:}"
+      countryCode: MX
+      playlistLoadLimit: 2
+      albumLoadLimit: 4

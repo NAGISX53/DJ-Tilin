@@ -1,0 +1,1 @@
+Avatar y banner oficiales proporcionados por el usuario para TILINbot.
