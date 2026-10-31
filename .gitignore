@@ -1,0 +1,18 @@
+node_modules/
+.env
+data/*.sqlite
+data/*.sqlite-*
+*.log
+runtime/
+lavalink/*.jar
+lavalink/plugins/
+lavalink/logs/
+*.pid
+
+# Local exports, screenshots and private backups
+automix-panel.png
+*.zip
+*.bundle
+backups/
+.env.*
+!.env.example
