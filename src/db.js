@@ -1,3 +1,4 @@
+import { DjSettings } from './music/dj.js';
 import { MusicLibrary } from './music/library.js';
 import { SessionStore } from './music/recovery.js';
 import { DatabaseSync } from 'node:sqlite';
@@ -59,3 +60,5 @@ export const panelStore = {
 };
 
 export const musicLibrary = new MusicLibrary(db);
+
+export const djSettings = new DjSettings(db);

@@ -53,3 +53,10 @@ Los fallos de análisis usan fundido sencillo; los fallos del mezclador tienen r
 - Playlists personales con guardar/ver/lista/reproducir/borrar, autocompletado y orden aleatorio compatible con AutoMix.
 - Persistencia en SQLite, aislamiento por usuario, protección frente a reemplazos accidentales y límites de capacidad.
 - 94 pruebas aprobadas y favoritos/playlists confirmados por el usuario.
+
+## Rol DJ y votación — quinta mejora pendiente de verificación en Discord
+
+- Configuración persistente por servidor con /dj configurar, estado y desactivar; controles abiertos de forma predeterminada.
+- Permisos musicales comunes para comandos y botones, con acceso de Administración del servidor.
+- Saltos por mayoría estricta de oyentes humanos, votos únicos por canción, limpieza al salir y protección frente a saltos duplicados.
+- Panel con rol y progreso de votos; 104 pruebas aprobadas, incluida la autorización del router real.

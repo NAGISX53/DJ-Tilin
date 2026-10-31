@@ -15,6 +15,8 @@ import { sessionSnapshot } from './recovery.js';
 import { sessionStore, panelStore, musicLibrary } from '../db.js';
 import { MusicPanels } from './panel.js';
 import { SearchPicks, searchTracks, searchPayload } from './search.js';
+import { SkipVotes, managesMusic, controlsMusic, isDjControl } from './dj.js';
+import { djSettings } from '../db.js';
 import { MIX_MODES } from './mix-settings.js';
 
 const safe = text => escapeMarkdown(String(text || 'Desconocido').slice(0, 130));
@@ -36,7 +38,7 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
   const lock = new GuildLock();
   const quality = new AudioQuality();
   const picks = new SearchPicks();
-  const panels = new MusicPanels(client,panelStorage);
+  const panels = new MusicPanels(client,panelStorage,undefined,state=>({...state,djSettings:djSettings.get(state.guildId),skipTally:state.skipVotes?.tally(listeners(state))}));
   let closing = false;
   const savedSession = guildId => recovery ? sessionStore.read(guildId) : null;
   function checkpoint(state, patch = {}) {
@@ -67,6 +69,7 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
 
   function announceTrack(state, track, transition) {
     if (sessions.get(state.guildId) !== state) return;
+    state.skipVotes?.reset();
     state.panelTransition = transition || state.mixer?.lastTransition || null;
     void panels.update(state);
   }
@@ -94,6 +97,7 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
       next: reason => {
         if (sessions.get(state.guildId) !== state) return null;
         selectNext(state, reason);
+        state.skipVotes.reset();
         const next = state.queue.next(reason);
         prefetch(state);
         return next;
@@ -108,6 +112,22 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
       mixer.activate();
       await state.player.playTrack({ track: { encoded: result.data.encoded }, paused });
     } catch (error) { mixer.stop(); state.mixer = null; state.streamEncoded = null; throw error; }
+  }
+
+  function listeners(state) {
+    const channel=client.guilds.cache.get(state.guildId)?.channels.cache.get(state.channelId);
+    return [...(channel?.members.values() || [])].filter(member=>!member.user.bot).map(member=>member.id);
+  }
+  async function skipSong(state) {
+    const generation=state.skipVotes.claim();if(generation===null)return false;
+    try {
+      if(state.mixer&&!state.mixer.finished) {
+        if(state.player.paused)await state.player.setPaused(false);
+        if(state.skipVotes.generation!==generation)return false;
+        state.mixer.pause(false);state.mixer.skip();
+      }else await state.player.stopTrack();
+      return true;
+    }catch(error){state.skipVotes.release(generation);throw error;}
   }
 
   async function synchronizeQuality(state, channel) {
@@ -143,6 +163,7 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
 
   async function advance(state, reason) {
     clearTimeout(state.idleTimer);
+    state.skipVotes.reset();
     // Failed tracks must never loop, even with repeat enabled.
     selectNext(state, reason);
     let track = state.queue.next(reason);
@@ -167,7 +188,7 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
       await shoukaku.leaveVoiceChannel(guild.id).catch(() => {});
       throw new Error('No pude entrar al canal de voz. Revisa los permisos y que Lavalink esté actualizado.');
     }
-    const state = { guildId: guild.id, channelId: channel.id, textChannel: textChannel, player, queue: new MusicQueue(), volume: saved?.volume ?? 50, starting: true, resumePosition: saved?.position || 0, resumePaused: Boolean(saved?.paused), resumeRate: saved?.rate || 1, mixSettings: getMixSettings(guild.id) };
+    const state = { skipVotes: new SkipVotes(), guildId: guild.id, channelId: channel.id, textChannel: textChannel, player, queue: new MusicQueue(), volume: saved?.volume ?? 50, starting: true, resumePosition: saved?.position || 0, resumePaused: Boolean(saved?.paused), resumeRate: saved?.rate || 1, mixSettings: getMixSettings(guild.id) };
     state.preparation = new TrackPreparation(player.node, async (node, item) => {
       await playableTrack(node, item);
       if (item.filePath) {
@@ -327,7 +348,7 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
     }
     console.log(`[Música] /${action}: recibido; antigüedad ${Date.now() - interaction.createdTimestamp}ms.`);
     try {
-      if (!await acknowledge(interaction, { ephemeral: ['favoritos','playlist'].includes(action) || action === 'buscar' || action === 'reproductor' || Boolean(interaction.isButton?.() || interaction.isStringSelectMenu?.()) })) return;
+      if (!await acknowledge(interaction, { ephemeral: ['favoritos','playlist','dj'].includes(action) || action === 'buscar' || action === 'reproductor' || Boolean(interaction.isButton?.() || interaction.isStringSelectMenu?.()) })) return;
       console.log(`[Música] /${action}: confirmado.`);
       const context={guildId:interaction.guildId,userId:interaction.user.id};
       if(action==='buscar') {
@@ -366,6 +387,28 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
       const payload = await lock.run(interaction.guildId, async () => {
         let state = sessions.get(interaction.guildId);
         const saved = !state ? savedSession(interaction.guildId) : null;
+        if(action==='dj') {
+          const sub=interaction.options.getSubcommand();
+          if(sub==='estado') {
+            const setting=djSettings.get(interaction.guildId);
+            return {content:setting.roleId?'🎧 Rol DJ: <@&'+setting.roleId+'> · Votación: '+(setting.voting?'activada (mayoría de oyentes humanos).':'desactivada.')+' Administrar servidor también permite controlar la música.':'🎧 Sin rol DJ: todos los oyentes del canal pueden controlar la música.'};
+          }
+          const member=await interaction.guild.members.fetch(interaction.user.id);
+          if(!managesMusic(member,interaction.guild))throw Error('Necesitas el permiso Administrar servidor para configurar el rol DJ.');
+          if(sub==='desactivar')djSettings.clear(interaction.guildId);
+          else {
+            const role=interaction.options.getRole('rol',true);
+            if(role.id===interaction.guildId||role.managed)throw Error('Elige un rol para personas; no @everyone ni un rol automático de una aplicación.');
+            djSettings.save(interaction.guildId,role.id,interaction.options.getBoolean('votacion')!==false);
+          }
+          state?.skipVotes.reset();
+          return {content:sub==='desactivar'?'✅ Rol DJ desactivado: todos los oyentes vuelven a controlar la música.':'✅ Rol DJ configurado. Los demás pueden añadir canciones'+(djSettings.get(interaction.guildId).voting?' y votar con /saltar o el botón Saltar / Votar.':'.')};
+        }
+        const restricted=isDjControl(action,interaction.options);
+        if(restricted) {
+          const member=await interaction.guild.members.fetch(interaction.user.id);
+          if(!controlsMusic(member,interaction.guild,djSettings.get(interaction.guildId)))throw Error('Este control requiere el rol DJ o el permiso Administrar servidor. Puedes añadir canciones y, si está habilitado, votar con /saltar.');
+        }
         if (['favoritos','playlist','panel-favorite'].includes(action)) {
           const kind=action==='playlist'?'playlist':'favorite',owner=interaction.user.id;
           const sub=action==='panel-favorite'?'guardar':interaction.options.getSubcommand();
@@ -500,15 +543,16 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
         }
         if (action === 'saltar') {
           if (!state.queue.current) throw new Error('No hay una canción sonando.');
-          if (state.mixer && !state.mixer.finished) {
-            // Match the existing player behavior: skipping starts the next song,
-            // including when the previous one was paused.
-            if (state.player.paused) await state.player.setPaused(false);
-            state.mixer.pause(false);
-            state.mixer.skip();
+          const settings=djSettings.get(interaction.guildId);
+          const member=await interaction.guild.members.fetch(interaction.user.id);
+          if(!controlsMusic(member,interaction.guild,settings)) {
+            if(!settings.voting)throw Error('Solo el rol DJ o Administrar servidor puede saltar; la votación está desactivada.');
+            const result=state.skipVotes.vote(interaction.user.id,listeners(state));
+            if(result.pending)return {content:'⏭️ El salto de esta canción ya está en curso.'};
+            if(!result.passed)return {content:(result.duplicate?'Ya habías votado. ':'🗳️ Voto registrado. ')+result.count+'/'+result.needed+' votos para saltar.'};
           }
-          else await state.player.stopTrack(); // The stopped event advances exactly once and bypasses repeat.
-          return { content: '⏭️ Canción saltada.' };
+          const skipped=await skipSong(state);
+          return { content:skipped?'⏭️ Canción saltada'+(!controlsMusic(member,interaction.guild,settings)?' por mayoría de votos.':'.'):'⏭️ El salto de esta canción ya está en curso.' };
         }
         if (action === 'volumen') {
           const value = interaction.options.getInteger('nivel', true);
@@ -550,11 +594,15 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
     event(state, async () => {
       if (newState.id === client.user.id) {
         if (!newState.channelId) { await destroy(state, { preserve: true, autoResume: false }); return; }
+        state.skipVotes.reset();
         state.channelId = newState.channelId;
         const destination = newState.guild.channels.cache.get(state.channelId);
         if (destination) await synchronizeQuality(state, destination);
       }
       const channel = newState.guild.channels.cache.get(state.channelId);
+      const tally=state.skipVotes.tally(listeners(state));
+      if(state.queue.current&&djSettings.get(state.guildId).voting&&tally.passed&&!tally.pending)await skipSong(state);
+      void panels.update(state);
       clearTimeout(state.emptyTimer);
       if (channel && !channel.members.some(member => !member.user.bot)) {
         state.emptyTimer = setTimeout(() => event(state, async () => {
@@ -570,6 +618,7 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
   client.on('guildDelete', guild => {
     const state = sessions.get(guild.id);
     if (recovery) sessionStore.delete(guild.id);
+    djSettings.clear(guild.id);
     panels.remove(guild.id);
     picks.removeGuild(guild.id);
     if (state) event(state, () => destroy(state,{updatePanel:false}));

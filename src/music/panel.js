@@ -36,11 +36,12 @@ export function renderPanel(state, phase='playing') {
     {name:'AutoMix',value:MIX_MODES[state.mixSettings.mode]+' · '+state.mixSettings.seconds+' s',inline:true},
     {name:'Audio',value:(state.quality?state.quality.bitrate/1000+' kbps · ':'')+(EQ_NAMES[state.equalizer] || EQ_NAMES.equilibrado),inline:true});
   const transition=state.panelTransition || state.mixer?.lastTransition;
+  if(state.djSettings?.roleId)embed.addFields({name:'Controles DJ',value:'<@&'+state.djSettings.roleId+'> · '+(state.djSettings.voting?'Votos para saltar: '+(state.skipTally?.count || 0)+'/'+(state.skipTally?.needed || 1):'Votación desactivada')});
   if(transition)embed.addFields({name:'Última mezcla',value:safe(transition.fallback || transition.type+' · '+transition.seconds.toFixed(1)+' s',250)});
   embed.setFooter({text:(state.guildName || 'Música del servidor')+' · Progreso actualizado cada 15 s'+(saved?' · Usa Recuperar cola o /continuar':'')});
   const rows=[new ActionRowBuilder().addComponents(
     button(saved?'continuar':'toggle',saved?'Recuperar cola':paused?'▶ Continuar':'Ⅱ Pausa',stopped||(!current&&!saved),ButtonStyle.Primary),
-    button('saltar','Saltar',!playing),button('cola','Cola',stopped),button('detener','Detener',stopped,ButtonStyle.Danger),button('panel-favorite','♡ Favorita',stopped||!current)),
+    button('saltar',state.djSettings?.voting?'Saltar / Votar':'Saltar',!playing),button('cola','Cola',stopped),button('detener','Detener',stopped,ButtonStyle.Danger),button('panel-favorite','♡ Favorita',stopped||!current)),
     new ActionRowBuilder().addComponents(button('panel-volume-down','Volumen −5',!active||state.volume<=0),button('panel-volume-up','Volumen +5',!active||state.volume>=100),
       button('panel-repeat','Repetir',!active),button('mezclar','Aleatorio',!active||state.queue.tracks.length<2),button('panel-refresh','Actualizar',!active)),
     new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('music:panel-mode').setPlaceholder('Modo de mezcla').setDisabled(!active)
@@ -51,8 +52,8 @@ export function renderPanel(state, phase='playing') {
 // One serial writer per guild: edits never block audio or duplicate a message
 // when a track change, progress timer and button arrive at the same time.
 export class MusicPanels {
-  constructor(client,store,onError=error=>console.warn('[Reproductor] '+error.message)) {
-    this.client=client;this.store=store;this.onError=onError;this.items=new Map();
+  constructor(client,store,onError=error=>console.warn('[Reproductor] '+error.message),decorate=state=>state) {
+    this.client=client;this.store=store;this.onError=onError;this.items=new Map();this.decorate=decorate;
   }
   update(...args) {
     try { return this.refresh(...args); }
@@ -64,7 +65,7 @@ export class MusicPanels {
     if(!item){item={guildId:state.guildId,record:this.store.read(state.guildId),worker:null,dirty:false,retryAt:0};this.items.set(state.guildId,item);}
     if(item.channel?.id!==state.textChannel.id)item.retryAt=0;
     item.channel=state.textChannel;
-    item.payload=renderPanel({...state,guildName:this.client.guilds?.cache.get(state.guildId)?.name || state.guildName},phase);
+    item.payload=renderPanel({...this.decorate(state),guildName:this.client.guilds?.cache.get(state.guildId)?.name || state.guildName},phase);
     item.dirty=true;
     if(force)item.retryAt=0;
     if(!item.worker){item.worker=this.pump(item).finally(()=>{item.worker=null;if(item.dirty&&!item.cancelled&&Date.now()>=item.retryAt)this.start(item);});}

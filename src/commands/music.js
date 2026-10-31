@@ -26,9 +26,13 @@ export const musicCommands = [
     .addSubcommand(s=>s.setName('ver').setDescription('Consulta las canciones de una playlist.').addStringOption(o=>o.setName('nombre').setDescription('Tu playlist').setRequired(true).setAutocomplete(true)).addIntegerOption(o=>o.setName('pagina').setDescription('Página').setMinValue(1).setMaxValue(21)))
     .addSubcommand(s=>s.setName('reproducir').setDescription('Añade una playlist a la cola.').addStringOption(o=>o.setName('nombre').setDescription('Tu playlist').setRequired(true).setAutocomplete(true)).addBooleanOption(o=>o.setName('aleatorio').setDescription('Aleatorio compatible con Smart Mix y DJ')))
     .addSubcommand(s=>s.setName('borrar').setDescription('Borra una de tus playlists guardadas.').addStringOption(o=>o.setName('nombre').setDescription('Tu playlist').setRequired(true).setAutocomplete(true)))),
+  command('dj', 'Configura quién controla la música y los votos para saltar.', data => data
+    .addSubcommand(s=>s.setName('estado').setDescription('Consulta el rol DJ y la votación de este servidor.'))
+    .addSubcommand(s=>s.setName('configurar').setDescription('Solo Administrar servidor: configura el rol DJ.').addRoleOption(o=>o.setName('rol').setDescription('Rol que podrá controlar la reproducción').setRequired(true)).addBooleanOption(o=>o.setName('votacion').setDescription('Permitir que los demás oyentes voten para saltar (predeterminado: sí)')))
+    .addSubcommand(s=>s.setName('desactivar').setDescription('Solo Administrar servidor: devuelve los controles a todos.'))),
   command('pausa', 'Pausa la música.'),
   command('continuar', 'Continúa la reproducción.'),
-  command('saltar', 'Salta a la siguiente canción.'),
+  command('saltar', 'Salta o vota para pasar a la siguiente canción.'),
   command('detener', 'Detiene la música, vacía la cola y sale del canal.'),
   command('reproductor', 'Muestra o mueve el reproductor fijo a este canal.'),
   command('actual', 'Muestra la canción actual y el progreso.'),

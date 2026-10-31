@@ -107,3 +107,13 @@ Los nombres se autocompletan y no distinguen mayúsculas. No se sobrescribe una 
 Guardar canciones o colas y reproducirlas requiere estar en voz; si el bot está activo, en su mismo canal. Consultar o eliminar tu biblioteca no requiere entrar a voz. Nadie puede acceder mediante estos comandos a la biblioteca de otro usuario.
 
 Paso 4 verificado por el usuario: favoritos y playlists se guardan y vuelven a añadirse correctamente.
+
+## Rol DJ y votación — paso 5
+
+Por defecto todos los oyentes conservan los controles. Un usuario con **Administrar servidor** puede activar la protección con `/dj configurar rol:@DJ votacion:true`. `/dj estado` muestra la configuración y `/dj desactivar` vuelve a abrir los controles. No se crea ni asigna ningún rol automáticamente.
+
+Con un rol configurado, quienes lo tienen y quienes administran el servidor pueden pausar, detener, recuperar, cambiar volumen, repetición, orden, AutoMix y ecualizador, quitar canciones o mover el reproductor. Los demás pueden pedir música, usar búsquedas y bibliotecas y consultar los ajustes. `/saltar` y el botón **Saltar / Votar** registran un voto por persona; se necesita más de la mitad de los oyentes humanos del mismo canal. DJ y administradores saltan directamente. Con `votacion:false`, solo ellos pueden saltar.
+
+Los votos se reinician por canción, incluso al repetir, y tras reiniciar el bot. Se retiran los votos de quienes salen y se vuelve a comprobar la mayoría al cambiar los oyentes. La configuración se guarda por servidor. Si se elimina el rol, Administrar servidor permite corregirlo. El panel local conserva su autorización independiente de propietario/usuarios autorizados.
+
+Paso 5: 104 pruebas aprobadas; pendiente de prueba del usuario en Discord.
