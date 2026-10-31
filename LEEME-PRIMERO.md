@@ -10,3 +10,5 @@ Bot dedicado únicamente a música.
 
 Se conservan el ecualizador, la calidad adaptable, la cola y tus preferencias. Ya no ejecuta moderación, tickets, roles ni estadísticas. La carpeta sigue llamándose TILINbot para conservar los accesos existentes.
 
+
+Puedes invitar DJ Tilin a otros servidores con el enlace de INVITAR-BOT.txt. Las colas y ajustes son independientes. Los administradores de cada servidor deben autorizar la instalación.

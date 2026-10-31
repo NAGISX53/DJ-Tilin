@@ -24,7 +24,7 @@ export async function qualityRequest(method, data) {
 
 export class AudioQuality {
   constructor(request = qualityRequest) { this.request = request; }
-  async synchronize(channel) {
+  async synchronize(channel, player) {
     const maximum = maximumBitrate(channel.guild);
     let bitrate = Math.min(channel.bitrate || 64000, maximum);
     const me = channel.guild.members.me;
@@ -33,8 +33,13 @@ export class AudioQuality {
       const updated = await channel.setBitrate(maximum, 'DJ Tilin: máxima calidad de música disponible');
       bitrate = Math.min(updated.bitrate, maximum);
     }
-    const encoder = await this.request('PUT', { bitrate });
+    const guildId = channel.guild.id;
+    if (!/^\d{17,20}$/.test(guildId || '')) throw Error('Servidor inválido para configurar el audio.');
+    const encoder = await this.request('PUT', { guildId, bitrate });
     if (encoder.bitrate !== bitrate) throw Error('El motor no confirmó el bitrate solicitado.');
+    if (!player) throw Error('No hay reproductor para aplicar la calidad.');
+    await player.setFilters({ ...player.filters, pluginFilters: { ...player.filters?.pluginFilters, tilinQuality: { guildId } } });
     return { maximum, bitrate, sampleRate: encoder.sampleRate, channels: encoder.channels, canManage: Boolean(canManage) };
   }
+  async release(guildId) { await this.request('DELETE', { guildId }); }
 }

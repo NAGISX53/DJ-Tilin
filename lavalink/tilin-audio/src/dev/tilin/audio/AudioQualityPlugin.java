@@ -9,6 +9,13 @@ import com.sun.jna.Native;
 import com.sun.jna.Pointer;
 import com.sun.jna.ptr.IntByReference;
 import dev.arbjerg.lavalink.api.AudioPlayerManagerConfiguration;
+import dev.arbjerg.lavalink.api.AudioFilterExtension;
+import com.sedmelluq.discord.lavaplayer.filter.FloatPcmAudioFilter;
+import com.sedmelluq.discord.lavaplayer.format.AudioDataFormat;
+import kotlinx.serialization.json.JsonElement;
+import kotlinx.serialization.json.JsonObject;
+import kotlinx.serialization.json.JsonPrimitive;
+import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
@@ -27,7 +34,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
-/** Adaptive encoder for this single-guild music node. No audio gain or EQ. */
+/** Adaptive encoder with isolated player profiles for multiple guilds. No audio gain or EQ. */
 @RestController
 @RequestMapping("/v4/tilin/audio")
 public class AudioQualityPlugin implements AudioPlayerManagerConfiguration {
@@ -46,6 +53,47 @@ public class AudioQualityPlugin implements AudioPlayerManagerConfiguration {
             if (reference.identifier == null || !reference.identifier.matches("^http://127\\.0\\.0\\.1:[0-9]+/music/[a-f0-9]{48}\\.wav$")) return null;
             return super.loadItem(manager, reference);
         }
+    }
+    static class Profile {
+        final AtomicInteger bitrate = new AtomicInteger(96000);
+        final AtomicInteger lastBytes = new AtomicInteger();
+        final AtomicLong frames = new AtomicLong();
+    }
+    static final Map<String, Profile> PROFILES = new ConcurrentHashMap<>();
+    static final ThreadLocal<Profile> CONTEXT = new ThreadLocal<>();
+    static Profile profile(String guildId) {
+        if (guildId == null || !guildId.matches("[0-9]{17,20}")) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid guildId");
+        return PROFILES.computeIfAbsent(guildId, key -> new Profile());
+    }
+    @Bean public AudioFilterExtension guildQualityFilter() { return new GuildQualityFilter(); }
+    public static class GuildQualityFilter implements AudioFilterExtension {
+        public String getName() { return "tilinQuality"; }
+        public boolean isEnabled(JsonElement data) { return true; }
+        public FloatPcmAudioFilter build(JsonElement data, AudioDataFormat format, FloatPcmAudioFilter output) {
+            if (!(data instanceof JsonObject)) throw new IllegalArgumentException("tilinQuality requires guildId");
+            var field = ((JsonObject) data).get("guildId");
+            if (!(field instanceof JsonPrimitive)) throw new IllegalArgumentException("tilinQuality requires guildId");
+            return new ProfileFilter(profile(((JsonPrimitive) field).getContent()), output);
+        }
+    }
+    // The final PCM output and encoder run on the processing thread. Scope the
+    // profile around forwarding each block; restore it even on seek/stop errors.
+    static class ProfileFilter implements FloatPcmAudioFilter {
+        final Profile profile;
+        final FloatPcmAudioFilter output;
+        ProfileFilter(Profile profile, FloatPcmAudioFilter output) { this.profile = profile; this.output = output; }
+        public void process(float[][] input, int offset, int length) throws InterruptedException {
+            var previous = CONTEXT.get(); CONTEXT.set(profile);
+            try { output.process(input, offset, length); }
+            finally { if (previous == null) CONTEXT.remove(); else CONTEXT.set(previous); }
+        }
+        public void flush() throws InterruptedException {
+            var previous = CONTEXT.get(); CONTEXT.set(profile);
+            try { output.flush(); }
+            finally { if (previous == null) CONTEXT.remove(); else CONTEXT.set(previous); }
+        }
+        public void seekPerformed(long requested, long provided) { output.seekPerformed(requested, provided); }
+        public void close() { output.close(); }
     }
     static final AtomicInteger BITRATE = new AtomicInteger(96000);
     static final AtomicInteger LAST_BYTES = new AtomicInteger();
@@ -87,18 +135,30 @@ public class AudioQualityPlugin implements AudioPlayerManagerConfiguration {
     }
 
     @GetMapping
-    public Map<String, Object> status() {
+    public Map<String, Object> status(@RequestParam(value="guildId", required=false) String guildId) {
+        if (guildId != null) {
+            var p = profile(guildId);
+            return Map.of("guildId", guildId, "bitrate", p.bitrate.get(), "sampleRate", 48000, "channels", 2, "lastPacketBytes", p.lastBytes.get(), "encodedFrames", p.frames.get());
+        }
         return Map.of("bitrate", BITRATE.get(), "sampleRate", 48000, "channels", 2,
             "frameMs", 20, "complexity", 10, "rateMode", "CBR", "lastPacketBytes", LAST_BYTES.get(),
             "encodedFrames", FRAMES.get(), "lastInputPeak", INPUT_PEAK.get());
     }
 
     @PutMapping
-    public Map<String, Object> update(@RequestBody Map<String, Integer> body) {
-        int rate = body.getOrDefault("bitrate", 0);
+    public Map<String, Object> update(@RequestBody Map<String, Object> body) {
+        int rate = body.get("bitrate") instanceof Number ? ((Number) body.get("bitrate")).intValue() : 0;
         if (rate < 8000 || rate > 384000) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "bitrate must be 8000..384000");
-        BITRATE.set(rate);
-        return status();
+        String guildId = body.get("guildId") instanceof String ? (String) body.get("guildId") : null;
+        if (guildId != null) profile(guildId).bitrate.set(rate);
+        else BITRATE.set(rate);
+        return status(guildId);
+    }
+
+    @DeleteMapping
+    public Map<String, Object> remove(@RequestBody Map<String, String> body) {
+        var guildId = body.get("guildId"); profile(guildId); PROFILES.remove(guildId);
+        return Map.of("removed", guildId);
     }
 
     static class AdaptiveFormat extends OpusAudioDataFormat {
@@ -124,7 +184,8 @@ public class AudioQualityPlugin implements AudioPlayerManagerConfiguration {
         private void check(int error) { if (error < 0) throw new IllegalStateException("Opus error " + error); }
         private int write(ShortBuffer input, ByteBuffer output) {
             if (closed) throw new IllegalStateException("Encoder closed");
-            int bitrate = BITRATE.get();
+            var profile = CONTEXT.get();
+            int bitrate = profile == null ? BITRATE.get() : profile.bitrate.get();
             if (activeBitrate != bitrate) {
                 check(api.opus_encoder_ctl(encoder, 4002, bitrate));
                 activeBitrate = bitrate;
@@ -136,6 +197,7 @@ public class AudioQualityPlugin implements AudioPlayerManagerConfiguration {
             check(bytes);
             output.position(0);
             output.limit(bytes);
+            if (profile != null) { profile.lastBytes.set(bytes); profile.frames.incrementAndGet(); }
             LAST_BYTES.set(bytes);
             INPUT_PEAK.set(peak);
             FRAMES.incrementAndGet();

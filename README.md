@@ -1,15 +1,15 @@
 # DJ Tilin
 
-Bot exclusivo de música para TILINES community. Conserva reproducción por canción/artista/YouTube/Spotify, cola, precarga, bitrate adaptable, ecualizador equilibrado y AutoMix.
+Bot exclusivo de música para Discord, compatible con varios servidores. Conserva reproducción por canción/artista/YouTube/Spotify, cola, precarga, bitrate adaptable, ecualizador equilibrado y AutoMix.
 
 ## Instalación desde este repositorio (Windows x64)
 
 1. Instala Node.js 24.17 o posterior y Git si quieres clonar el repositorio. La instalación actual se probó con Node.js 26.
 2. Descarga o clona el código y abre una terminal en su carpeta.
 3. Ejecuta npm ci para instalar las versiones fijadas en package-lock.json (incluye FFmpeg).
-4. Copia .env.example como .env y completa DISCORD_TOKEN, DISCORD_CLIENT_ID, DISCORD_GUILD_ID y OWNER_ID con los datos de tu bot. No compartas el token. Discord OAuth y las credenciales Spotify son opcionales.
+4. Copia .env.example como .env y completa DISCORD_TOKEN, DISCORD_CLIENT_ID y OWNER_ID con los datos de tu bot. DISCORD_GUILD_ID es opcional y solo selecciona el servidor inicial del panel; no limita dónde funciona. No compartas el token. Discord OAuth y las credenciales Spotify son opcionales.
 5. Ejecuta PREPARAR-MUSICA.cmd. Requiere Internet: descarga Java 21, Lavalink, yt-dlp y las dependencias del plugin, y compila/prueba el codificador.
-6. Invita tu aplicación de Discord con los alcances bot y applications.commands. Permisos musicales: Ver canales, Enviar mensajes, Insertar enlaces, Conectar y Hablar; Gestionar canales permite subir el bitrate del canal. No necesita Administrador ni los intents privilegiados de miembros o mensajes.
+6. En el portal de Discord activa Bot público, desactiva Requiere concesión de código y habilita solo Instalación en servidor con los alcances bot y applications.commands. Invita la aplicación con los permisos musicales. Permisos musicales: Ver canales, Enviar mensajes, Insertar enlaces, Conectar y Hablar; Gestionar canales permite subir el bitrate del canal. No necesita Administrador ni los intents privilegiados de miembros o mensajes.
 7. Ejecuta registrar-comandos.cmd y luego iniciar.cmd. Entra a un canal de voz y usa /play.
 8. ABRIR-PANEL.cmd abre el panel local. DETENER.cmd detiene ambos servicios.
 
@@ -50,3 +50,13 @@ npm test y npm run check. No publiques .env, datos, runtime o claves del panel.
 Usa /play busqueda:ENLACE aleatorio:true con una playlist pública de YouTube o Spotify. La primera canción se elige al azar y se baraja únicamente el nuevo bloque agregado, respetando la cola previa. En Smart Mix y DJ, con sincronización activada, se analizan anticipadamente hasta seis candidatas del mismo bloque y se elige una transición compatible por BPM (considerando mitad/doble tempo), confianza y, sin normalización, cercanía de sonoridad. Se usa el tempo efectivo de la canción saliente. Si no hay un ritmo fiable/compatible disponible, conserva el orden aleatorio y el fundido de respaldo. No identifica tonalidades ni garantiza la mejor transición de toda la playlist.
 
 Sin aleatorio:true se respeta el orden original. /mezclar baraja toda la cola pendiente y permite esta selección inteligente. Normal, Crossfade o sincronizar:false mantienen el orden barajado. /cola muestra el orden provisional; AutoMix puede ajustar la siguiente cuando termine el análisis. Repetir canción conserva la actual; saltar la omite. Cada canción permanece en la cola hasta consumirse o quitarse, incluido si el mismo título aparece varias veces. Se mantiene el límite de 200 pendientes y la advertencia de listas Spotify parcialmente disponibles.
+
+## Invitar DJ Tilin a otros servidores
+
+[Invitar al bot oficial](https://discord.com/oauth2/authorize?client_id=1548060851263770745&permissions=3165184&integration_type=0&scope=bot%20applications.commands)
+
+Necesitas Gestionar servidor para instalarlo. Después de autorizarlo, entra a un canal de voz y usa /play. Los 14 comandos se registran globalmente, solo para servidores; DISCORD_GUILD_ID ya no restringe el uso. La instalación en una cuenta personal no incorpora al bot a canales de voz. Cada servidor conserva su cola, volumen de reproducción, repetición, ecualizador y AutoMix independientes. Una sola instancia puede servir a varios servidores; la capacidad depende de la PC y de su conexión.
+
+Los permisos predeterminados son Ver canales, Enviar mensajes, Insertar enlaces, Conectar y Hablar. Gestionar canales es opcional y permite al bot elevar el bitrate del canal; sin él respeta el configurado. No solicita Administrador. En el panel local, el dueño puede seleccionar un servidor instalado; los accesos autorizados antiguos se limitan a su propio servidor. Los demás usuarios configuran la música con los comandos de Discord desde su canal de voz.
+
+El plugin tilinQuality aplica un perfil Opus por reproductor/servidor y mantiene los filtros del ecualizador. Se verificaron dos reproductores Lavalink con audio real simultáneo a 96/384 kbps y un cambio en vivo a 64/384 kbps. El guion scripts/probar-multiservidor.js repite esta comprobación sin conectarse a voz en Discord (requiere una canción en caché).

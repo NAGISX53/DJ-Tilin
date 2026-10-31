@@ -100,7 +100,7 @@ export function createMusic(client) {
   }
 
   async function synchronizeQuality(state, channel) {
-    const settings = await quality.synchronize(channel);
+    const settings = await quality.synchronize(channel, state.player);
     if (state.quality?.bitrate !== settings.bitrate) console.log(`[Música] Opus estéreo 48kHz: ${settings.bitrate / 1000} kbps (máximo del servidor ${settings.maximum / 1000}).`);
     state.quality = settings;
   }
@@ -116,6 +116,7 @@ export function createMusic(client) {
     state.mixer?.stop();
     state.preparation.close();
     sessions.delete(state.guildId);
+    await quality.release(state.guildId).catch(error => console.warn(`[Música] Limpieza de calidad: ${error.message}`));
     await shoukaku.leaveVoiceChannel(state.guildId).catch(error => console.warn(`[Música] Al salir: ${error.message}`));
   }
 
@@ -182,8 +183,8 @@ export function createMusic(client) {
   }
 
   async function run(interaction, action) {
-    if (!interaction.inGuild() || interaction.guildId !== config.discord.guildId) {
-      return interaction.reply({ content: 'Usa este comando en el servidor configurado para DJ Tilin.', ephemeral: true });
+    if (!interaction.inGuild()) {
+      return interaction.reply({ content: 'Usa este comando dentro de un servidor donde esté DJ Tilin.', ephemeral: true });
     }
     console.log(`[Música] /${action}: recibido; antigüedad ${Date.now() - interaction.createdTimestamp}ms.`);
     try {
@@ -381,6 +382,11 @@ export function createMusic(client) {
     });
   });
 
+  client.on('guildDelete', guild => {
+    const state = sessions.get(guild.id);
+    if (state) event(state, () => destroy(state));
+  });
+
   client.on('guildUpdate', (oldGuild, guild) => {
     const state = sessions.get(guild.id);
     if (state) event(state, async () => {
@@ -404,6 +410,7 @@ export function createMusic(client) {
 
   return {
     run,
+    guilds: () => [...client.guilds.cache.values()].map(g => ({ id: g.id, name: g.name })),
     configure: (guildId, patch) => lock.run(guildId, () => configureMix(sessions.get(guildId), guildId, patch)),
     settings: guildId => getMixSettings(guildId),
     isReady: () => Boolean(shoukaku.options.nodeResolver(shoukaku.nodes)),

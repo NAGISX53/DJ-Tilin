@@ -8,12 +8,12 @@ const commandMap = new Collection(commands.map(c => [c.data.name, c]));
 client.music = createMusic(client);
 client.once(Events.ClientReady, c => {
   console.log('[DJ Tilin] Conectado como ' + c.user.tag);
-  if (!c.guilds.cache.has(config.discord.guildId)) console.error('[DJ Tilin] No encuentro el servidor configurado.');
+  console.log('[DJ Tilin] Disponible en ' + c.guilds.cache.size + ' servidor(es).');
   c.user.setActivity('/play · Música y AutoMix', { type: ActivityType.Listening });
 });
 client.on(Events.InteractionCreate, async interaction => {
   try {
-    if (interaction.guildId !== config.discord.guildId) return;
+    if (!interaction.inGuild()) return;
     if (interaction.isChatInputCommand()) {
       const cmd = commandMap.get(interaction.commandName);
       if (cmd) await cmd.execute(interaction);
@@ -31,7 +31,7 @@ client.on(Events.InteractionCreate, async interaction => {
 client.on(Events.Error, error => console.error('[DISCORD]', error.message));
 await client.login(config.discord.token);
 const { setDiscordStatusProvider, setMusicStatusProvider, setMusicControl } = await import('./web/server.js');
-setDiscordStatusProvider(() => client.isReady() && client.guilds.cache.has(config.discord.guildId));
+setDiscordStatusProvider(() => client.isReady());
 setMusicStatusProvider(client.music.isReady);
 setMusicControl(client.music);
 

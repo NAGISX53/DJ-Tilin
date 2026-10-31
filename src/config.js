@@ -1,6 +1,6 @@
 import 'dotenv/config';
 
-const required = ['DISCORD_TOKEN', 'DISCORD_CLIENT_ID', 'DISCORD_GUILD_ID', 'OWNER_ID'];
+const required = ['DISCORD_TOKEN', 'DISCORD_CLIENT_ID', 'OWNER_ID'];
 for (const key of required) {
   if (!process.env[key]) console.warn(`[CONFIG] Falta ${key}.`);
 }

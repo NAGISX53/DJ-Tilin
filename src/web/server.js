@@ -48,10 +48,10 @@ function sessionUser(req) {
   return session;
 }
 
-function authorized(userId) {
+function authorized(userId, guildId = config.discord.guildId) {
   if (!userId) return false;
   if (userId === config.discord.ownerId) return true;
-  return Boolean(db.prepare(`SELECT 1 FROM authorized_users WHERE guild_id=? AND user_id=?`).get(config.discord.guildId, userId));
+  return Boolean(db.prepare(`SELECT 1 FROM authorized_users WHERE guild_id=? AND user_id=?`).get(guildId, userId));
 }
 
 app.get('/auth/discord', (req, res) => {
@@ -107,18 +107,33 @@ app.get('/api/me', (req, res) => {
   res.json({ authenticated: true, user });
 });
 
+function panelGuilds(userId) {
+  return (musicControl?.guilds() || []).filter(guild => authorized(userId, guild.id));
+}
+app.get('/api/music/guilds', (req, res) => {
+  const user = sessionUser(req);
+  if (!user) return res.status(401).json({ error: 'No autorizado' });
+  res.json({ guilds: panelGuilds(user.id), preferredGuildId: config.discord.guildId || null });
+});
+app.use('/api/music', (req, res, next) => {
+  const user = sessionUser(req);
+  if (!user) return res.status(401).json({ error: 'No autorizado' });
+  const guilds = panelGuilds(user.id);
+  const guildId = req.query.guildId || (guilds.some(g => g.id === config.discord.guildId) ? config.discord.guildId : guilds[0]?.id);
+  if (!guilds.some(g => g.id === guildId)) return res.status(403).json({ error: 'No tienes acceso a este servidor o el bot no está instalado.' });
+  req.musicGuildId = guildId;
+  next();
+});
 app.get('/api/music/settings', (req, res) => {
-  if (!authorized(sessionUser(req)?.id)) return res.status(401).json({ error: 'No autorizado' });
-  res.json({ settings: getMixSettings(config.discord.guildId), playback: musicControl?.status(config.discord.guildId) || null });
+  res.json({ settings: getMixSettings(req.musicGuildId), playback: musicControl?.status(req.musicGuildId) || null });
 });
 app.put('/api/music/settings', async (req, res) => {
-  if (!authorized(sessionUser(req)?.id)) return res.status(401).json({ error: 'No autorizado' });
   const origin = req.get('origin');
   const allowedOrigins = new Set([`http://127.0.0.1:${config.dashboard.port}`, `http://localhost:${config.dashboard.port}`, config.dashboard.baseUrl]);
   if (origin && !allowedOrigins.has(origin)) return res.status(403).json({ error: 'Origen no autorizado' });
   try {
-    const settings = musicControl ? await musicControl.configure(config.discord.guildId, req.body) : saveMixSettings(config.discord.guildId, req.body);
-    res.json({ settings, playback: musicControl?.status(config.discord.guildId) || null });
+    const settings = musicControl ? await musicControl.configure(req.musicGuildId, req.body) : saveMixSettings(req.musicGuildId, req.body);
+    res.json({ settings, playback: musicControl?.status(req.musicGuildId) || null });
   } catch (error) { res.status(400).json({ error: error.message }); }
 });
 

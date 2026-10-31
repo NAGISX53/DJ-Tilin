@@ -13,3 +13,11 @@
 - 41 pruebas automatizadas y comprobación de configuración/sintaxis/comandos.
 
 Los fallos de análisis usan fundido sencillo; los fallos del mezclador tienen reproducción normal de respaldo. La selección musical es heurística, sin análisis de tonalidad.
+
+## Instalación en varios servidores
+
+- Invitación pública con permisos de música y sin Administrador.
+- 14 comandos globales; se retiran las restricciones al servidor original.
+- DISCORD_GUILD_ID opcional y selector de servidor en el panel local.
+- Bitrate Opus por servidor con filtro tilinQuality y limpieza al desconectar.
+- Pruebas de aislamiento de colas/ajustes y dos reproductores Lavalink.

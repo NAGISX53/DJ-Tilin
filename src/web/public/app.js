@@ -1,3 +1,4 @@
+function musicSettingsUrl() { return '/api/music/settings?guildId=' + encodeURIComponent(document.getElementById('music_guild').value); }
 async function api(url, opts) {
   const r = await fetch(url, opts);
   if (r.status === 401) throw new Error('unauthorized');
@@ -12,6 +13,17 @@ async function load() {
     if (!me.authenticated) return;
     document.querySelector('#login').hidden = true;
     document.querySelector('#dashboard').hidden = false;
+    const available = await api('/api/music/guilds');
+    const select = document.getElementById('music_guild');
+    for (const guild of available.guilds) {
+      const option = document.createElement('option'); option.value = guild.id; option.textContent = guild.name; select.appendChild(option);
+    }
+    if (available.guilds.some(g => g.id === available.preferredGuildId)) select.value = available.preferredGuildId;
+    if (!available.guilds.length) {
+      document.getElementById('mix_status').textContent = 'Añade DJ Tilin a un servidor para configurar su música.';
+      document.getElementById('mix_save').disabled = true; return;
+    }
+    select.addEventListener('change', loadMix);
     await loadMix();
   } catch {}
 }
@@ -27,7 +39,9 @@ function mixStatus(data) {
 }
 async function loadMix() {
   try {
-    const data = await api('/api/music/settings');
+    const selected = document.getElementById('music_guild').value;
+    const data = await api(musicSettingsUrl());
+    if (selected !== document.getElementById('music_guild').value) return;
     const value = data.settings;
     document.getElementById('mix_mode').value = value.mode;
     document.getElementById('mix_seconds').value = value.seconds;
@@ -44,7 +58,7 @@ document.getElementById('mix_refresh').addEventListener('click', loadMix);
 document.getElementById('mix_save').addEventListener('click', async event => {
   event.target.disabled = true;
   try {
-    const data = await api('/api/music/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+    const data = await api(musicSettingsUrl(), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
       mode: document.getElementById('mix_mode').value,
       seconds: Number(document.getElementById('mix_seconds').value),
       syncBpm: document.getElementById('mix_sync').checked,

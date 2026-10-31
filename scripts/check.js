@@ -26,13 +26,18 @@ try {
   assert.equal(commands.length, 14);
   assert(!commands.some(c => /setup|ticket|rol|stats|moder/.test(c.data.name)));
   const serialized = commands.map(command => command.data.toJSON());
+  for (const cmd of serialized) { assert.deepEqual(cmd.contexts,[0]);assert.deepEqual(cmd.integration_types,[0]); }
   assert.equal(new Set(serialized.map(c=>c.name)).size, commands.length);
   assert.equal(getMusicEqualizer('test'), 'equilibrado');
   assert.equal(getMixSettings('test').mode, 'smart');
   saveMixSettings('test', { mode: 'dj', seconds: 8 });
   saveMixSettings('test', { normalize: false });
   assert.deepEqual(getMixSettings('test'), { mode: 'dj', seconds: 8, syncBpm: true, normalize: false });
+  saveMixSettings('other', { mode: 'crossfade', seconds: 4 });
+  assert.equal(getMixSettings('test').mode, 'dj');
+  assert.equal(getMixSettings('other').mode, 'crossfade');
   setMusicEqualizer('test', 'original');
+  assert.equal(getMusicEqualizer('other'), 'equilibrado');
   assert.equal(getMusicEqualizer('test'), 'original');
   setMusicEqualizer('test', 'equilibrado');
   assert.equal(getMusicEqualizer('test'), 'equilibrado');

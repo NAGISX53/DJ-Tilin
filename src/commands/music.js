@@ -1,7 +1,7 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, InteractionContextType, ApplicationIntegrationType } from 'discord.js';
 
 function command(name, description, options) {
-  const data = new SlashCommandBuilder().setName(name).setDescription(description).setDMPermission(false);
+  const data = new SlashCommandBuilder().setName(name).setDescription(description).setContexts(InteractionContextType.Guild).setIntegrationTypes(ApplicationIntegrationType.GuildInstall);
   options?.(data);
   return { data, execute: interaction => interaction.client.music.run(interaction, name) };
 }

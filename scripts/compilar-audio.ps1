@@ -34,6 +34,8 @@ $sources = Get-ChildItem -LiteralPath (Join-Path $botRoot 'lavalink\tilin-audio\
 if ($LASTEXITCODE -ne 0) { throw 'No se pudo compilar el codificador.' }
 & $java.FullName -cp "$classes;$classpath" dev.tilin.audio.EncoderSelfTest
 if ($LASTEXITCODE -ne 0) { throw 'Fallaron las pruebas de audio nativo.' }
+& $java.FullName -cp "$classes;$classpath" dev.tilin.audio.EncoderMultiGuildTest
+if ($LASTEXITCODE -ne 0) { throw 'Fallaron las pruebas de aislamiento entre servidores.' }
 $metadataDir = Join-Path $classes 'lavalink-plugins'
 New-Item -ItemType Directory -Path $metadataDir -Force | Out-Null
 Set-Content -LiteralPath (Join-Path $metadataDir 'tilin-audio.properties') -Encoding ascii -Value "path=dev.tilin.audio`nname=tilin-audio`nversion=1.0.0"
@@ -41,13 +43,16 @@ $pluginDir = Join-Path $botRoot 'lavalink\plugins'
 New-Item -ItemType Directory -Path $pluginDir -Force | Out-Null
 $outputJar = Join-Path $pluginDir 'tilin-audio.jar'
 if (Test-Path -LiteralPath $outputJar) { Remove-Item -LiteralPath $outputJar }
-[IO.Compression.ZipFile]::CreateFromDirectory($classes, $outputJar)
-$archive = [IO.Compression.ZipFile]::Open($outputJar, [IO.Compression.ZipArchiveMode]::Update)
+$archive = [IO.Compression.ZipFile]::Open($outputJar, [IO.Compression.ZipArchiveMode]::Create)
 try {
+    foreach ($file in (Get-ChildItem -LiteralPath $classes -File -Recurse)) {
+        $name = $file.FullName.Substring($classes.Length + 1).Replace('\','/')
+        [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $file.FullName, $name) | Out-Null
+    }
     # Spring's component scanner discovers packages by their directory entries.
     foreach ($directory in (Get-ChildItem -LiteralPath $classes -Directory -Recurse)) {
         $name = $directory.FullName.Substring($classes.Length + 1).Replace('\','/') + '/'
-        if (-not $archive.GetEntry($name)) { $archive.CreateEntry($name) | Out-Null }
+        $archive.CreateEntry($name) | Out-Null
     }
 } finally { $archive.Dispose() }
 Write-Host 'Plugin de audio compilado y probado.'
