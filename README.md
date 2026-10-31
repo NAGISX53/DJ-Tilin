@@ -128,4 +128,4 @@ El espectro se procesa en un worker, con hasta 96 ventanas mono de 8192 muestras
 
 Referencia del método de correlación: [documentación oficial de Key en Essentia](https://essentia.upf.edu/reference/std_Key.html). La implementación FFT/cromas es independiente y no añade Essentia como dependencia.
 
-Paso 6: 114 pruebas aprobadas, incluidos FFmpeg, worker, caché, progresiones mayores/menores, selección y mezcla real con límites de pico. Pendiente de prueba de escucha del usuario.
+Paso 6: 114 pruebas aprobadas, incluidos FFmpeg, worker, caché, progresiones mayores/menores, selección y mezcla real con límites de pico. Verificado por el usuario: los datos aparecen y las transiciones se escuchan bien, sin cortes ni distorsión.

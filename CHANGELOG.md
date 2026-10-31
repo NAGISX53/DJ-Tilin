@@ -63,10 +63,12 @@ Los fallos de análisis usan fundido sencillo; los fallos del mezclador tienen r
 
 - El usuario confirmó que funcionan los permisos DJ y la votación.
 
-## Análisis musical — sexta mejora en validación
+## Análisis musical — sexta mejora verificada
 
 - Tonalidad y energía estimadas con análisis espectral en worker y caché v4.
 - Selección de candidatas por ritmo, compatibilidad armónica y cercanía de energía.
 - Solapamientos breves ante tonalidades alejadas o cambios grandes de energía.
 - /analisis y datos estimados en el reproductor; 20 comandos y 114 pruebas aprobadas.
 - Sin cambios de orden para peticiones manuales; respaldo si el análisis es incierto o falla.
+
+- El usuario confirmó los datos de análisis y las transiciones sin cortes ni distorsión. Las seis mejoras de experiencia quedan verificadas.
