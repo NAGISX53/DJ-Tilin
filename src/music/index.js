@@ -74,7 +74,7 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
     if (sessions.get(state.guildId) !== state) return;
     state.skipVotes?.reset();
     state.panelTransition = transition || state.mixer?.lastTransition || null;
-    void panels.update(state);
+    void panels.update(state,'playing',{repost:true});
   }
 
   function prefetch(state) {
@@ -181,7 +181,7 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
         track = state.queue.next('loadFailed');
       }
     }
-    checkpoint(state); void panels.update(state); idle(state);
+    checkpoint(state); void panels.update(state,'playing',{repost:true}); idle(state);
   }
 
   async function connectSession(guild, channel, textChannel, saved = null) {
@@ -220,7 +220,7 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
         const resumePosition = mixer.current?.track === state.queue.current ? mixer.position : 0;
         state.mixer = null; state.streamEncoded = null;
         mixer.stop();
-        if (mixer.finished && !mixer.failure) { state.queue.current = null; checkpoint(state); idle(state); return; }
+        if (mixer.finished && !mixer.failure) { state.queue.current = null; checkpoint(state); void panels.update(state,'playing',{repost:true}); idle(state); return; }
         state.mixingDisabled = true;
         if (state.queue.current) {
           await notify(state, '⚠️ AutoMix no respondió. Continúo con reproducción normal.');

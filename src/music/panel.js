@@ -61,14 +61,15 @@ export class MusicPanels {
     try { return this.refresh(...args); }
     catch(error) { this.onError(error); return Promise.resolve(false); }
   }
-  refresh(state,phase='playing',{force=false}={}) {
+  refresh(state,phase='playing',{force=false,repost=false}={}) {
     if(!state.textChannel?.send)return Promise.resolve(false);
     let item=this.items.get(state.guildId);
-    if(!item){item={guildId:state.guildId,record:this.store.read(state.guildId),worker:null,dirty:false,retryAt:0};this.items.set(state.guildId,item);}
+    if(!item){item={guildId:state.guildId,record:this.store.read(state.guildId),worker:null,dirty:false,retryAt:0,repostVersion:0,publishedVersion:0};this.items.set(state.guildId,item);}
     if(item.channel?.id!==state.textChannel.id)item.retryAt=0;
     item.channel=state.textChannel;
     item.payload=renderPanel({...this.decorate(state),guildName:this.client.guilds?.cache.get(state.guildId)?.name || state.guildName},phase);
     item.dirty=true;
+    if(repost)item.repostVersion++;
     if(force)item.retryAt=0;
     if(!item.worker){item.worker=this.pump(item).finally(()=>{item.worker=null;if(item.dirty&&!item.cancelled&&Date.now()>=item.retryAt)this.start(item);});}
     return item.worker;
@@ -80,14 +81,30 @@ export class MusicPanels {
   async pump(item) {
     while(item.dirty&&!item.cancelled&&Date.now()>=item.retryAt){
       item.dirty=false;
-      const channel=item.channel,payload=item.payload;
+      const channel=item.channel,payload=item.payload,repostVersion=item.repostVersion;
       try{
         if(item.record&&item.record.channelId!==channel.id){
           const old=this.client.channels?.cache.get(item.record.channelId) || await this.client.channels?.fetch(item.record.channelId).catch(()=>null);
           if(old?.messages)await old.messages.edit(item.record.messageId,{content:'🎛️ El reproductor se trasladó a <#'+channel.id+'>.',embeds:[],components:[],allowedMentions:{parse:[]}}).catch(()=>{});
           item.record=null;
         }
-        if(item.record){
+        if(item.record&&repostVersion>item.publishedVersion){
+          const previous=item.record;
+          const message=await channel.send(payload);
+          if(item.cancelled){await channel.messages.delete(message.id).catch(()=>{});return false;}
+          const record={channelId:channel.id,messageId:message.id};
+          try{this.store.save(item.guildId,record);}
+          catch(error){await channel.messages.delete(message.id).catch(()=>{});throw error;}
+          item.record=record;item.publishedVersion=repostVersion;
+          // Only remove our previous panel after the replacement is available.
+          try{await channel.messages.delete(previous.messageId);}
+          catch(error){
+            if(Number(error.code)!==10008){
+              try{await channel.messages.edit(previous.messageId,{content:'🎛️ Reproductor actualizado. Usa el mensaje más reciente.',embeds:[],components:[],allowedMentions:{parse:[]}});}
+              catch(retireError){this.onError(retireError);}
+            }
+          }
+        }else if(item.record){
           try{await channel.messages.edit(item.record.messageId,payload);}
           catch(error){if(Number(error.code)!==10008)throw error;item.record=null;}
         }
@@ -95,6 +112,7 @@ export class MusicPanels {
           const message=await channel.send(payload);
           if(item.cancelled)return false;
           item.record={channelId:channel.id,messageId:message.id};this.store.save(item.guildId,item.record);
+          item.publishedVersion=repostVersion;
         }
         item.retryAt=0;
       }catch(error){item.retryAt=Date.now()+60000;this.onError(error);}

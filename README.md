@@ -129,3 +129,7 @@ El espectro se procesa en un worker, con hasta 96 ventanas mono de 8192 muestras
 Referencia del método de correlación: [documentación oficial de Key en Essentia](https://essentia.upf.edu/reference/std_Key.html). La implementación FFT/cromas es independiente y no añade Essentia como dependencia.
 
 Paso 6: 114 pruebas aprobadas, incluidos FFmpeg, worker, caché, progresiones mayores/menores, selección y mezcla real con límites de pico. Verificado por el usuario: los datos aparecen y las transiciones se escuchan bien, sin cortes ni distorsión.
+
+## Reproductor al final del chat
+
+Al comenzar una canción, tanto por cambio automático como por salto o repetición, el bot publica una tarjeta nueva al final del canal y borra la anterior. También vuelve a publicar el estado cuando termina la cola. Primero confirma el envío nuevo para conservar el panel anterior si falla el envío. Si no puede borrar la tarjeta antigua, intenta retirar sus controles. Los cambios de volumen, pausa y progreso editan la tarjeta actual sin reenviarla. El identificador nuevo queda guardado para las siguientes actualizaciones.

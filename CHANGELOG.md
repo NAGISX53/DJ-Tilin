@@ -72,3 +72,9 @@ Los fallos de análisis usan fundido sencillo; los fallos del mezclador tienen r
 - Sin cambios de orden para peticiones manuales; respaldo si el análisis es incierto o falla.
 
 - El usuario confirmó los datos de análisis y las transiciones sin cortes ni distorsión. Las seis mejoras de experiencia quedan verificadas.
+
+## Reproductor visible entre mensajes recientes
+
+- Reenvío del reproductor al empezar cada canción y al terminar la cola, con retirada de la tarjeta anterior.
+- Envíos serializados, conservación del mensaje anterior si falla el nuevo envío y edición normal para progreso y controles.
+- 120 pruebas aprobadas, incluidas concurrencia, repetición y errores de envío/borrado.
