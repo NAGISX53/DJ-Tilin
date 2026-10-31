@@ -44,3 +44,5 @@ Los fallos de análisis usan fundido sencillo; los fallos del mezclador tienen r
 - Se conserva el identificador exacto del resultado elegido y se utiliza la cola musical existente.
 - Las búsquedas no mantienen bloqueados los controles de reproducción; las respuestas antiguas no sustituyen búsquedas nuevas.
 - 80 pruebas aprobadas y búsqueda real comprobada; pendiente de validar el menú con el usuario.
+
+- Disponibilidad de /buscar: el despliegue conserva los comandos globales y sincroniza una copia idéntica en el servidor configurado para publicación inmediata.

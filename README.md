@@ -7,7 +7,7 @@ Bot exclusivo de música para Discord, compatible con varios servidores. Conserv
 1. Instala Node.js 24.17 o posterior y Git si quieres clonar el repositorio. La instalación actual se probó con Node.js 26.
 2. Descarga o clona el código y abre una terminal en su carpeta.
 3. Ejecuta npm ci para instalar las versiones fijadas en package-lock.json (incluye FFmpeg).
-4. Copia .env.example como .env y completa DISCORD_TOKEN, DISCORD_CLIENT_ID y OWNER_ID con los datos de tu bot. DISCORD_GUILD_ID es opcional y solo selecciona el servidor inicial del panel; no limita dónde funciona. No compartas el token. Discord OAuth y las credenciales Spotify son opcionales.
+4. Copia .env.example como .env y completa DISCORD_TOKEN, DISCORD_CLIENT_ID y OWNER_ID con los datos de tu bot. DISCORD_GUILD_ID es opcional: selecciona el servidor inicial del panel y permite publicar allí una copia inmediata de los comandos; no limita dónde funciona. No compartas el token. Discord OAuth y las credenciales Spotify son opcionales.
 5. Ejecuta PREPARAR-MUSICA.cmd. Requiere Internet: descarga Java 21, Lavalink, yt-dlp y las dependencias del plugin, y compila/prueba el codificador.
 6. En el portal de Discord activa Bot público, desactiva Requiere concesión de código y habilita solo Instalación en servidor con los alcances bot y applications.commands. Invita la aplicación con los permisos musicales. Permisos musicales: Ver canales, Enviar mensajes, Insertar enlaces, Conectar y Hablar; Gestionar canales permite subir el bitrate del canal. No necesita Administrador ni los intents privilegiados de miembros o mensajes.
 7. Ejecuta registrar-comandos.cmd y luego iniciar.cmd. Entra a un canal de voz y usa /play.
@@ -88,3 +88,5 @@ El menú dura cinco minutos, pertenece únicamente a quien lo pidió y se usa un
 Los filtros añaden términos a la búsqueda y las etiquetas se deducen del título; no certifican que un resultado sea una versión oficial, original o extendida. El usuario decide con la información de cada resultado. No se descargan las cinco alternativas: solo la elegida.
 
 Estado del paso 3: 80 pruebas aprobadas, consulta real con cinco versiones comprobada y comando instalado; pendiente de confirmación del menú en Discord. Los pasos siguientes son favoritos/playlists guardadas, rol DJ/votaciones y análisis musical más avanzado.
+
+Si los comandos globales nuevos tardan en aparecer, registrar-comandos.cmd también sincroniza una copia idéntica en DISCORD_GUILD_ID, cuando está configurado. El resto de servidores conserva los comandos globales.
