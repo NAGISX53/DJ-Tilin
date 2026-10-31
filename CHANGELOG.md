@@ -30,9 +30,17 @@ Los fallos de análisis usan fundido sencillo; los fallos del mezclador tienen r
 - Pruebas de cierre forzado, duplicados, datos dañados, aislamiento, selección exacta de audio y reanudación real en los cuatro modos.
 - Reinicio real verificado y confirmado por el usuario: canción, posición aproximada, dos pendientes y volumen conservados.
 
-## Reproductor fijo — segunda mejora en validación
+## Reproductor fijo — segunda mejora verificada
 
 - Un mensaje persistente por servidor con portada, progreso, siguiente canción y ajustes de audio.
 - Controles privados, selector de AutoMix y /reproductor para mostrar o mover el panel.
 - Actualizaciones serializadas; reemplazo de mensajes borrados y reutilización tras reiniciar.
-- 68 pruebas aprobadas; falta confirmación de los controles en Discord.
+- 68 pruebas aprobadas y controles confirmados por el usuario en Discord.
+
+## Elegir versiones — tercera mejora en validación
+
+- /buscar con cinco coincidencias, duración, artista, enlaces y filtros de versión.
+- Menús privados, ligados al usuario/servidor/canal de voz, con caducidad y selección única.
+- Se conserva el identificador exacto del resultado elegido y se utiliza la cola musical existente.
+- Las búsquedas no mantienen bloqueados los controles de reproducción; las respuestas antiguas no sustituyen búsquedas nuevas.
+- 80 pruebas aprobadas y búsqueda real comprobada; pendiente de validar el menú con el usuario.

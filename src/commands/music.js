@@ -10,6 +10,11 @@ export const musicCommands = [
   command('play', 'Reproduce una canción, artista o enlace de YouTube / Spotify.', data => data.addStringOption(o =>
     o.setName('busqueda').setDescription('Canción, artista, enlace de video, álbum o playlist pública').setRequired(true).setMaxLength(500))
     .addBooleanOption(o => o.setName('aleatorio').setDescription('Mezcla la playlist; Smart Mix y DJ eligen la siguiente por compatibilidad'))),
+  command('buscar', 'Busca varias versiones y elige cuál añadir a la cola.', data => data
+    .addStringOption(o => o.setName('consulta').setDescription('Nombre de la canción y artista').setRequired(true).setMaxLength(450))
+    .addStringOption(o => o.setName('version').setDescription('Tipo de versión que quieres encontrar').addChoices(
+      {name:'Todas',value:'all'},{name:'Estudio / oficial',value:'original'},{name:'Remix',value:'remix'},
+      {name:'En directo',value:'live'},{name:'Extendida',value:'extended'},{name:'Instrumental',value:'instrumental'}))),
   command('pausa', 'Pausa la música.'),
   command('continuar', 'Continúa la reproducción.'),
   command('saltar', 'Salta a la siguiente canción.'),

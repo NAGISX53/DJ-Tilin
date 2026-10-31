@@ -29,7 +29,7 @@ process.chdir(dir);
 try {
   const {db,getMusicEqualizer,setMusicEqualizer,getMixSettings,saveMixSettings} = await import('../src/db.js');
   const {commands} = await import('../src/commands/index.js');
-  assert.equal(commands.length, 15);
+  assert.equal(commands.length, 16);
   assert(!commands.some(c => /setup|ticket|rol|stats|moder/.test(c.data.name)));
   const serialized = commands.map(command => command.data.toJSON());
   for (const cmd of serialized) { assert.deepEqual(cmd.contexts,[0]);assert.deepEqual(cmd.integration_types,[0]); }

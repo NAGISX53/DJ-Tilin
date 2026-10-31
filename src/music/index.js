@@ -1,7 +1,7 @@
 import { Shoukaku, Connectors } from 'shoukaku';
 import { ChannelType, EmbedBuilder, PermissionFlagsBits, escapeMarkdown } from 'discord.js';
 import { config } from '../config.js';
-import { GuildLock, MusicQueue, identifier } from './queue.js';
+import { GuildLock, MusicQueue, identifier, MAX_QUEUE } from './queue.js';
 import { playableTrack, resolveTracks } from './sources.js';
 import { TrackPreparation } from './preparation.js';
 import { AudioQuality } from './quality.js';
@@ -14,6 +14,7 @@ import { MixSession } from './mixer.js';
 import { sessionSnapshot } from './recovery.js';
 import { sessionStore, panelStore } from '../db.js';
 import { MusicPanels } from './panel.js';
+import { SearchPicks, searchTracks, searchPayload } from './search.js';
 import { MIX_MODES } from './mix-settings.js';
 
 const safe = text => escapeMarkdown(String(text || 'Desconocido').slice(0, 130));
@@ -34,6 +35,7 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
   const sessions = new Map();
   const lock = new GuildLock();
   const quality = new AudioQuality();
+  const picks = new SearchPicks();
   const panels = new MusicPanels(client,panelStorage);
   let closing = false;
   const savedSession = guildId => recovery ? sessionStore.read(guildId) : null;
@@ -295,14 +297,70 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
       .setFooter({ text: `Página ${page}/${pages} · ${state.queue.tracks.length} pendientes · Repetición: ${state.queue.repeat}${state.queue.tracks[0]?.shuffleGroup ? ' · Aleatorio (AutoMix puede reordenar)' : ''}` })] };
   }
 
+  async function enqueue(interaction,tracks,{shuffled=false,accept}={}) {
+    let state=sessions.get(interaction.guildId);
+    if(state?.queue.tracks.length>=MAX_QUEUE)throw Error('La cola está llena (200 canciones pendientes).');
+    const channel=await checkVoice(interaction,state,true);
+    let created=false;
+    if(!state){
+      const saved=savedSession(interaction.guildId);
+      state=saved?await restoreSession(interaction.guild,channel,interaction.channel,saved):await connectSession(interaction.guild,channel,interaction.channel);
+      created=!saved;
+    }
+    try{
+      if(state.queue.tracks.length>=MAX_QUEUE)throw Error('La cola está llena (200 canciones pendientes).');
+      if(accept)accept();
+      state.textChannel=interaction.channel;
+      const result=state.queue.add(tracks,interaction.user.id,{shuffle:shuffled});
+      if(!result.added)throw Error('La cola está llena (200 canciones pendientes).');
+      clearTimeout(state.idleTimer);
+      if(!state.queue.current)await advance(state,'initial');else prefetch(state);
+      checkpoint(state);void panels.update(state);
+      return result;
+    }catch(error){if(created&&!state.queue.current&&!state.queue.tracks.length)await destroy(state);throw error;}
+  }
+
   async function run(interaction, action) {
     if (!interaction.inGuild()) {
       return interaction.reply({ content: 'Usa este comando dentro de un servidor donde esté DJ Tilin.', ephemeral: true });
     }
     console.log(`[Música] /${action}: recibido; antigüedad ${Date.now() - interaction.createdTimestamp}ms.`);
     try {
-      if (!await acknowledge(interaction, { ephemeral: action === 'reproductor' || Boolean(interaction.isButton?.() || interaction.isStringSelectMenu?.()) })) return;
+      if (!await acknowledge(interaction, { ephemeral: action === 'buscar' || action === 'reproductor' || Boolean(interaction.isButton?.() || interaction.isStringSelectMenu?.()) })) return;
       console.log(`[Música] /${action}: confirmado.`);
+      const context={guildId:interaction.guildId,userId:interaction.user.id};
+      if(action==='buscar') {
+        const generation=picks.begin(context);
+        const voice=await checkVoice(interaction,sessions.get(interaction.guildId));
+        const node=shoukaku.options.nodeResolver(shoukaku.nodes);
+        if(!node)throw Error('El motor de música está desconectado.');
+        const query=interaction.options.getString('consulta',true);
+        const tracks=await searchTracks(node,query,interaction.options.getString('version') || 'all');
+        if(!tracks.length)throw Error('No encontré versiones. Prueba canción y artista, o cambia el tipo de versión.');
+        const record=picks.create({...context,generation,voiceChannelId:voice.id,tracks,edit:payload=>interaction.editReply(payload)});
+        return await interaction.editReply(searchPayload(query,record));
+      }
+      if(action.startsWith('search-cancel:')) {
+        const record=picks.cancel(action.slice('search-cancel:'.length),context);
+        await record.edit({content:'Búsqueda cancelada.',embeds:[],components:[]}).catch(()=>{});
+        return await interaction.editReply({content:'Búsqueda cancelada.',allowedMentions:{parse:[]}});
+      }
+      if(action.startsWith('search-pick:')) {
+        const token=action.slice('search-pick:'.length),value=interaction.values?.[0];
+        let chosen, selectedRecord;
+        await lock.run(interaction.guildId,async()=>{
+          const result=picks.resolve(token,value,context);chosen=result.track;selectedRecord=result.record;
+          const voice=await checkVoice(interaction,sessions.get(interaction.guildId));
+          if(voice.id!==result.record.voiceChannelId)throw Error('Vuelve al canal de voz donde hiciste la búsqueda o usa /buscar de nuevo.');
+          await enqueue(interaction,[chosen],{accept:()=>{
+            const accepted=picks.claim(token,value,context);
+            void accepted.record.edit({content:'🎵 Preparando: '+title(chosen),embeds:[],components:[],allowedMentions:{parse:[]}}).catch(()=>{});
+          }});
+        });
+        const confirmation={content:'✅ Añadí la versión elegida: '+title(chosen),embeds:[],components:[],allowedMentions:{parse:[]}};
+        await selectedRecord.edit(confirmation).catch(()=>{});
+        return await interaction.editReply(confirmation);
+      }
       if (action === 'play') await interaction.editReply({ content: '🎵 Preparando la música…', allowedMentions: { parse: [] } });
       const payload = await lock.run(interaction.guildId, async () => {
         let state = sessions.get(interaction.guildId);
@@ -341,19 +399,8 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
           }
           if (!tracks.length) throw new Error('No encontré canciones. Prueba el título junto con el artista o un enlace público.');
           console.log(`[Música] ${tracks.length} canción(es) encontradas.`);
-          const channel = await checkVoice(interaction, state, true);
-          if (!state) {
-            const saved = savedSession(interaction.guildId);
-            state = saved ? await restoreSession(interaction.guild, channel, interaction.channel, saved)
-              : await connectSession(interaction.guild, channel, interaction.channel);
-          }
-          state.textChannel = interaction.channel;
           const shuffled = interaction.options.getBoolean('aleatorio') === true;
-          const result = state.queue.add(tracks, interaction.user.id, { shuffle: shuffled });
-          if (!result.added) throw new Error('La cola está llena (200 canciones pendientes).');
-          clearTimeout(state.idleTimer);
-          if (!state.queue.current) await advance(state, 'initial');
-          else prefetch(state);
+          const result = await enqueue(interaction,tracks,{shuffled});
           return { content: `✅ Agregué ${result.added} canción(es): ${title(tracks[0])}.${result.omitted ? ` Se omitieron ${result.omitted} por el límite de 200 canciones.` : ''}${tracks[0].info.sourceName === 'spotify' ? '\nSpotify: audio mediante una coincidencia en YouTube.' : ''}${note ? `\n${note}` : ''}${shuffled ? '\n🔀 Lista aleatoria. Smart Mix y DJ elegirán la siguiente entre hasta 6 candidatas analizadas; normal y crossfade conservan el orden aleatorio.' : ''}` };
         }
         if (action === 'automix') {
@@ -480,6 +527,7 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
     const state = sessions.get(guild.id);
     if (recovery) sessionStore.delete(guild.id);
     panels.remove(guild.id);
+    picks.removeGuild(guild.id);
     if (state) event(state, () => destroy(state,{updatePanel:false}));
   });
 
@@ -521,6 +569,7 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
     handleButton: interaction => run(interaction, interaction.customId.slice('music:'.length)),
     handleSelect: interaction => run(interaction, interaction.customId.slice('music:'.length)),
     close: async ({ preserve = false } = {}) => {
+      picks.clear();
       closing = true; clearInterval(checkpointTimer); clearInterval(recoveryTimer); clearInterval(panelTimer);
       await Promise.all([...sessions.values()].map(state => lock.run(state.guildId, () => destroy(state, { preserve }))));
       for (const name of [...shoukaku.nodes.keys()]) shoukaku.removeNode(name);

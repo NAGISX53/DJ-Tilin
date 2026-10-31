@@ -14,3 +14,5 @@ Se conservan el ecualizador, la calidad adaptable, la cola y tus preferencias. Y
 Puedes invitar DJ Tilin a otros servidores con el enlace de INVITAR-BOT.txt. Las colas y ajustes son independientes. Los administradores de cada servidor deben autorizar la instalación.
 
 El reproductor se actualiza en un solo mensaje. Usa /reproductor desde voz para mostrarlo en otro canal de texto; los controles confirman en privado.
+
+Para elegir entre distintas versiones, usa /buscar con canción/artista y el filtro opcional version. Elige una de las cinco coincidencias privadas para añadirla a la cola.

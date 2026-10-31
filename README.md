@@ -20,7 +20,7 @@ La carpeta del repositorio puede tener cualquier nombre; los accesos se resuelve
 ## Estructura
 
 - src/music: reproducción, cola, descargas, análisis y mezclador.
-- src/commands: los 15 comandos musicales.
+- src/commands: los 16 comandos musicales.
 - src/web: panel y acceso local/OAuth.
 - lavalink/tilin-audio/src: código Java del plugin y su prueba nativa.
 - scripts: instalación, compilación, arranque y verificaciones.
@@ -28,7 +28,7 @@ La carpeta del repositorio puede tener cualquier nombre; los accesos se resuelve
 
 ## Uso
 Entra a voz y usa /play busqueda:Daft Punk Get Lucky.
-Comandos: /reproductor, /play, /pausa, /continuar, /saltar, /detener, /actual, /calidad, /automix, /ecualizador, /cola, /volumen, /repetir, /mezclar y /quitar.
+Comandos: /buscar, /reproductor, /play, /pausa, /continuar, /saltar, /detener, /actual, /calidad, /automix, /ecualizador, /cola, /volumen, /repetir, /mezclar y /quitar.
 
 AutoMix ofrece normal, crossfade, smart y dj; fundidos de 3–15 segundos, sincronización de ritmos compatibles y normalización. Conserva el tono al ajustar el tempo. El análisis es heurístico y usa crossfade si la sincronización no resulta fiable. Configuración inicial: Smart Mix, 6 segundos, sincronización y normalización activadas. Los ajustes y el ecualizador persisten en SQLite.
 
@@ -55,7 +55,7 @@ Sin aleatorio:true se respeta el orden original. /mezclar baraja toda la cola pe
 
 [Invitar al bot oficial](https://discord.com/oauth2/authorize?client_id=1548060851263770745&permissions=3165184&integration_type=0&scope=bot%20applications.commands)
 
-Necesitas Gestionar servidor para instalarlo. Después de autorizarlo, entra a un canal de voz y usa /play. Los 15 comandos se registran globalmente, solo para servidores; DISCORD_GUILD_ID ya no restringe el uso. La instalación en una cuenta personal no incorpora al bot a canales de voz. Cada servidor conserva su cola, volumen de reproducción, repetición, ecualizador y AutoMix independientes. Una sola instancia puede servir a varios servidores; la capacidad depende de la PC y de su conexión.
+Necesitas Gestionar servidor para instalarlo. Después de autorizarlo, entra a un canal de voz y usa /play. Los 16 comandos se registran globalmente, solo para servidores; DISCORD_GUILD_ID ya no restringe el uso. La instalación en una cuenta personal no incorpora al bot a canales de voz. Cada servidor conserva su cola, volumen de reproducción, repetición, ecualizador y AutoMix independientes. Una sola instancia puede servir a varios servidores; la capacidad depende de la PC y de su conexión.
 
 Los permisos predeterminados son Ver canales, Enviar mensajes, Insertar enlaces, Conectar y Hablar. Gestionar canales es opcional y permite al bot elevar el bitrate del canal; sin él respeta el configurado. No solicita Administrador. En el panel local, el dueño puede seleccionar un servidor instalado; los accesos autorizados antiguos se limitan a su propio servidor. Los demás usuarios configuran la música con los comandos de Discord desde su canal de voz.
 
@@ -77,4 +77,14 @@ El bot mantiene un mensaje por servidor con portada, progreso (actualizado cada 
 
 Usa /reproductor desde voz para mostrarlo o trasladarlo a otro canal de texto. Al moverlo se desactivan los controles del mensaje anterior. El identificador se guarda en SQLite para reutilizarlo después de reiniciar; si el mensaje ya no existe, se crea un reemplazo. No necesita leer el historial para editar su propio mensaje. Cuando la cola se guarda, muestra Recuperar cola; al detenerla, desactiva los controles. Los permisos de texto necesarios son Ver canal, Enviar mensajes e Insertar enlaces. Un fallo del panel no detiene el audio.
 
-Estado de paso 2: 68 pruebas automáticas aprobadas y panel publicado en Discord; pendiente de confirmar los controles con el usuario antes de empezar la búsqueda de versiones. Favoritos, rol DJ/votaciones y análisis de tonalidad siguen pendientes.
+Paso 2 verificado por el usuario: los controles funcionan y actualizan el mismo mensaje.
+
+## Elegir versiones — paso 3
+
+Usa /buscar consulta:Daft Punk Get Lucky version:Remix desde el canal de voz. Puedes elegir Todas, Estudio/oficial, Remix, En directo, Extendida o Instrumental. Se muestran hasta cinco resultados de YouTube con título, artista, duración y enlace. La búsqueda es privada y no modifica la cola hasta que selecciones una canción. /play conserva la reproducción directa y sigue admitiendo enlaces y playlists.
+
+El menú dura cinco minutos, pertenece únicamente a quien lo pidió y se usa una sola vez. Una búsqueda nueva reemplaza la anterior del mismo usuario en ese servidor. Para elegir debes seguir en el canal de voz de la búsqueda y, si el bot ya está activo, en el mismo canal que el bot. Al elegir, se usa el identificador exacto del video seleccionado y se añade a la cola normal, conservando AutoMix, precarga, recuperación y el panel fijo. Cancelar o dejar caducar una búsqueda no añade nada. Si el bot reinicia, vuelve a usar /buscar.
+
+Los filtros añaden términos a la búsqueda y las etiquetas se deducen del título; no certifican que un resultado sea una versión oficial, original o extendida. El usuario decide con la información de cada resultado. No se descargan las cinco alternativas: solo la elegida.
+
+Estado del paso 3: 80 pruebas aprobadas, consulta real con cinco versiones comprobada y comando instalado; pendiente de confirmación del menú en Discord. Los pasos siguientes son favoritos/playlists guardadas, rol DJ/votaciones y análisis musical más avanzado.
