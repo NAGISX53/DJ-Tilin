@@ -20,7 +20,7 @@ La carpeta del repositorio puede tener cualquier nombre; los accesos se resuelve
 ## Estructura
 
 - src/music: reproducción, cola, descargas, análisis y mezclador.
-- src/commands: los 14 comandos musicales.
+- src/commands: los 15 comandos musicales.
 - src/web: panel y acceso local/OAuth.
 - lavalink/tilin-audio/src: código Java del plugin y su prueba nativa.
 - scripts: instalación, compilación, arranque y verificaciones.
@@ -28,7 +28,7 @@ La carpeta del repositorio puede tener cualquier nombre; los accesos se resuelve
 
 ## Uso
 Entra a voz y usa /play busqueda:Daft Punk Get Lucky.
-Comandos: /play, /pausa, /continuar, /saltar, /detener, /actual, /calidad, /automix, /ecualizador, /cola, /volumen, /repetir, /mezclar y /quitar.
+Comandos: /reproductor, /play, /pausa, /continuar, /saltar, /detener, /actual, /calidad, /automix, /ecualizador, /cola, /volumen, /repetir, /mezclar y /quitar.
 
 AutoMix ofrece normal, crossfade, smart y dj; fundidos de 3–15 segundos, sincronización de ritmos compatibles y normalización. Conserva el tono al ajustar el tempo. El análisis es heurístico y usa crossfade si la sincronización no resulta fiable. Configuración inicial: Smart Mix, 6 segundos, sincronización y normalización activadas. Los ajustes y el ecualizador persisten en SQLite.
 
@@ -55,7 +55,7 @@ Sin aleatorio:true se respeta el orden original. /mezclar baraja toda la cola pe
 
 [Invitar al bot oficial](https://discord.com/oauth2/authorize?client_id=1548060851263770745&permissions=3165184&integration_type=0&scope=bot%20applications.commands)
 
-Necesitas Gestionar servidor para instalarlo. Después de autorizarlo, entra a un canal de voz y usa /play. Los 14 comandos se registran globalmente, solo para servidores; DISCORD_GUILD_ID ya no restringe el uso. La instalación en una cuenta personal no incorpora al bot a canales de voz. Cada servidor conserva su cola, volumen de reproducción, repetición, ecualizador y AutoMix independientes. Una sola instancia puede servir a varios servidores; la capacidad depende de la PC y de su conexión.
+Necesitas Gestionar servidor para instalarlo. Después de autorizarlo, entra a un canal de voz y usa /play. Los 15 comandos se registran globalmente, solo para servidores; DISCORD_GUILD_ID ya no restringe el uso. La instalación en una cuenta personal no incorpora al bot a canales de voz. Cada servidor conserva su cola, volumen de reproducción, repetición, ecualizador y AutoMix independientes. Una sola instancia puede servir a varios servidores; la capacidad depende de la PC y de su conexión.
 
 Los permisos predeterminados son Ver canales, Enviar mensajes, Insertar enlaces, Conectar y Hablar. Gestionar canales es opcional y permite al bot elevar el bitrate del canal; sin él respeta el configurado. No solicita Administrador. En el panel local, el dueño puede seleccionar un servidor instalado; los accesos autorizados antiguos se limitan a su propio servidor. Los demás usuarios configuran la música con los comandos de Discord desde su canal de voz.
 
@@ -69,4 +69,12 @@ Al iniciar o reconectar Lavalink, recupera automáticamente las sesiones con oye
 
 DETENER.cmd solicita un cierre ordenado y guarda antes de salir; si no puede contactar al proceso, usa el último checkpoint disponible. Un cierre forzado puede repetir o adelantar algunos segundos por el intervalo de guardado y el búfer de audio. Durante un fundido se recupera una pista principal, sin reconstruir el solapamiento anterior; las emisiones en vivo se reconectan al directo. Se guardan identificadores públicos, sin archivos de audio, rutas privadas, flujos temporales ni credenciales. Los archivos SQLite se mantienen fuera de Git.
 
-Estado de entrega: recuperación implementada, pruebas automáticas y de audio completadas; pendiente de confirmación auditiva del usuario mediante reinicio en Discord. Las mejoras del reproductor fijo, búsqueda de versiones, favoritos, rol DJ/votaciones y análisis de tonalidad siguen pendientes y se abordarán una por una.
+Paso 1 verificado: se reinició el proceso y el motor, se recuperó la canción cerca de 1:19 con sus dos pendientes y volumen de 35%, y el usuario confirmó que se escuchaba correctamente.
+
+## Reproductor fijo — paso 2
+
+El bot mantiene un mensaje por servidor con portada, progreso (actualizado cada 15 segundos), canción siguiente, volumen, repetición, AutoMix, ecualizador y bitrate. Los cambios de canción editan ese mensaje. Los botones permiten pausar/continuar, saltar, ver cola, detener, volumen ±5, repetir, aleatorio y actualizar. El menú cambia el modo Normal/Crossfade/Smart/DJ. Las confirmaciones de botones y menús son privadas; los cambios de reproducción exigen estar en el mismo canal de voz.
+
+Usa /reproductor desde voz para mostrarlo o trasladarlo a otro canal de texto. Al moverlo se desactivan los controles del mensaje anterior. El identificador se guarda en SQLite para reutilizarlo después de reiniciar; si el mensaje ya no existe, se crea un reemplazo. No necesita leer el historial para editar su propio mensaje. Cuando la cola se guarda, muestra Recuperar cola; al detenerla, desactiva los controles. Los permisos de texto necesarios son Ver canal, Enviar mensajes e Insertar enlaces. Un fallo del panel no detiene el audio.
+
+Estado de paso 2: 68 pruebas automáticas aprobadas y panel publicado en Discord; pendiente de confirmar los controles con el usuario antes de empezar la búsqueda de versiones. Favoritos, rol DJ/votaciones y análisis de tonalidad siguen pendientes.

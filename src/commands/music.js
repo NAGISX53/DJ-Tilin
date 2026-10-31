@@ -14,6 +14,7 @@ export const musicCommands = [
   command('continuar', 'Continúa la reproducción.'),
   command('saltar', 'Salta a la siguiente canción.'),
   command('detener', 'Detiene la música, vacía la cola y sale del canal.'),
+  command('reproductor', 'Muestra o mueve el reproductor fijo a este canal.'),
   command('actual', 'Muestra la canción actual y el progreso.'),
   command('calidad', 'Muestra el bitrate disponible y la calidad de audio del bot.'),
   command('automix', 'Configura transiciones, mezcla inteligente y DJ automático.', data => data

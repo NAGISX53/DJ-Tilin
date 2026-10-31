@@ -22,10 +22,17 @@ Los fallos de análisis usan fundido sencillo; los fallos del mezclador tienen r
 - Bitrate Opus por servidor con filtro tilinQuality y limpieza al desconectar.
 - Pruebas de aislamiento de colas/ajustes y dos reproductores Lavalink.
 
-## Recuperación de cola — primera mejora en validación
+## Recuperación de cola — primera mejora verificada
 
 - Checkpoints SQLite independientes por servidor y restauración de canción, posición aproximada, cola, pausa, volumen y repetición.
 - Recuperación automática con oyentes y recuperación manual con /continuar cuando no hay sesión activa.
 - Cierre ordenado desde DETENER.cmd, sin revivir colas borradas con /detener.
 - Pruebas de cierre forzado, duplicados, datos dañados, aislamiento, selección exacta de audio y reanudación real en los cuatro modos.
-- Pendiente de confirmación auditiva en Discord antes de continuar con la siguiente mejora.
+- Reinicio real verificado y confirmado por el usuario: canción, posición aproximada, dos pendientes y volumen conservados.
+
+## Reproductor fijo — segunda mejora en validación
+
+- Un mensaje persistente por servidor con portada, progreso, siguiente canción y ajustes de audio.
+- Controles privados, selector de AutoMix y /reproductor para mostrar o mover el panel.
+- Actualizaciones serializadas; reemplazo de mensajes borrados y reutilización tras reiniciar.
+- 68 pruebas aprobadas; falta confirmación de los controles en Discord.

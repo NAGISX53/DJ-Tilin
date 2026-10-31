@@ -49,3 +49,10 @@ export function setMusicEqualizer(guildId, mode) {
 }
 
 export const sessionStore = new SessionStore(db);
+
+db.exec('CREATE TABLE IF NOT EXISTS music_panels (guild_id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, message_id TEXT NOT NULL)');
+export const panelStore = {
+  read: guildId => db.prepare('SELECT channel_id AS channelId,message_id AS messageId FROM music_panels WHERE guild_id=?').get(guildId) || null,
+  save: (guildId, record) => db.prepare('INSERT INTO music_panels(guild_id,channel_id,message_id) VALUES (?,?,?) ON CONFLICT(guild_id) DO UPDATE SET channel_id=excluded.channel_id,message_id=excluded.message_id').run(guildId,record.channelId,record.messageId),
+  delete: guildId => db.prepare('DELETE FROM music_panels WHERE guild_id=?').run(guildId)
+};

@@ -26,7 +26,7 @@ export function normalizeSession(value) {
 export function sessionSnapshot(state) {
   const sameTrack = state.mixer?.current?.track === state.queue.current;
   const position = state.starting ? state.resumePosition || 0 : state.mixer
-    ? (sameTrack ? state.mixer.position : 0) : state.player.position || 0;
+    ? (!state.mixer.current || sameTrack ? state.mixer.position : 0) : state.player.position || 0;
   return normalizeSession({ version: 1, guildId: state.guildId, voiceChannelId: state.channelId,
     textChannelId: state.textChannel?.id || null, current: state.queue.current, tracks: state.queue.tracks,
     repeat: state.queue.repeat, volume: state.volume, paused: state.starting ? Boolean(state.resumePaused) : Boolean(state.player.paused),

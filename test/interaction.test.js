@@ -29,3 +29,9 @@ test('no ejecuta otra vez una interacción ya completada', async () => {
     webhook: { fetchMessage: async () => ({ flags: { bitfield: 0 } }) }
   }), false);
 });
+
+
+test('los controles del panel confirman en privado sin publicar mensajes adicionales',async()=>{
+ let received;await acknowledge({deferReply:async options=>{received=options;}},{ephemeral:true});
+ assert.deepEqual(received,{flags:64});
+});

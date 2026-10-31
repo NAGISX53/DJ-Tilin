@@ -80,3 +80,9 @@ test('una desconexión manual conserva la cola pero no autoriza volver a entrar 
   assert.throws(()=>normalizeSession({...snapshot(),autoResume:'yes'}));
  }finally{db.close();}
 });
+
+
+test('antes de abrir el decodificador recuperado conserva la posición inicial del mezclador',()=>{
+ const state={guildId:guild,channelId:'444444444444444444',textChannel:null,queue:{current:song(),tracks:[],repeat:'off'},volume:50,player:{position:0,paused:false},mixer:{position:43210}};
+ assert.equal(sessionSnapshot(state).position,43210);
+});

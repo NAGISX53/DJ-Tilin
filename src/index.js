@@ -17,6 +17,8 @@ client.on(Events.InteractionCreate, async interaction => {
     if (interaction.isChatInputCommand()) {
       const cmd = commandMap.get(interaction.commandName);
       if (cmd) await cmd.execute(interaction);
+    } else if (interaction.isStringSelectMenu() && interaction.customId.startsWith('music:')) {
+      await client.music.handleSelect(interaction);
     } else if (interaction.isButton() && interaction.customId.startsWith('music:')) {
       await client.music.handleButton(interaction);
     }

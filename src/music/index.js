@@ -1,5 +1,5 @@
 import { Shoukaku, Connectors } from 'shoukaku';
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder, PermissionFlagsBits, escapeMarkdown } from 'discord.js';
+import { ChannelType, EmbedBuilder, PermissionFlagsBits, escapeMarkdown } from 'discord.js';
 import { config } from '../config.js';
 import { GuildLock, MusicQueue, identifier } from './queue.js';
 import { playableTrack, resolveTracks } from './sources.js';
@@ -12,7 +12,8 @@ import { getMusicEqualizer, setMusicEqualizer, getMixSettings, saveMixSettings }
 import { analyze } from './analysis.js';
 import { MixSession } from './mixer.js';
 import { sessionSnapshot } from './recovery.js';
-import { sessionStore } from '../db.js';
+import { sessionStore, panelStore } from '../db.js';
+import { MusicPanels } from './panel.js';
 import { MIX_MODES } from './mix-settings.js';
 
 const safe = text => escapeMarkdown(String(text || 'Desconocido').slice(0, 130));
@@ -21,14 +22,8 @@ const duration = ms => {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 };
 const title = track => `${safe(track.info.title)} — ${safe(track.info.author)}`;
-const controls = () => [new ActionRowBuilder().addComponents(
-  new ButtonBuilder().setCustomId('music:toggle').setLabel('Pausa / Continuar').setStyle(ButtonStyle.Secondary),
-  new ButtonBuilder().setCustomId('music:saltar').setLabel('Saltar').setStyle(ButtonStyle.Primary),
-  new ButtonBuilder().setCustomId('music:cola').setLabel('Cola').setStyle(ButtonStyle.Secondary),
-  new ButtonBuilder().setCustomId('music:detener').setLabel('Detener').setStyle(ButtonStyle.Danger)
-)];
 
-export function createMusic(client, { recovery = true } = {}) {
+export function createMusic(client, { recovery = true, panelStorage = panelStore } = {}) {
   cleanAudioCache().catch(error => console.warn(`[Música] Caché: ${error.message}`));
   const shoukaku = new Shoukaku(new Connectors.DiscordJS(client), [{
     name: 'tilin-music', url: `${config.lavalink.host}:${config.lavalink.port}`,
@@ -39,6 +34,7 @@ export function createMusic(client, { recovery = true } = {}) {
   const sessions = new Map();
   const lock = new GuildLock();
   const quality = new AudioQuality();
+  const panels = new MusicPanels(client,panelStorage);
   let closing = false;
   const savedSession = guildId => recovery ? sessionStore.read(guildId) : null;
   function checkpoint(state, patch = {}) {
@@ -51,13 +47,14 @@ export function createMusic(client, { recovery = true } = {}) {
   }
   const reportRecoveryError = error => console.warn('[Recuperación] ' + error.message);
   const checkpointTimer = setInterval(checkpointAll, 3000).unref();
+  const panelTimer = setInterval(() => { for (const state of sessions.values()) void panels.update(state); }, 15000).unref();
   const recoveryTimer = setInterval(() => { recoverSaved().catch(reportRecoveryError); }, 30000).unref();
   client.once('clientReady', () => { recoverSaved().catch(reportRecoveryError); });
 
 
   function configureMix(state, guildId, patch) {
     const settings = saveMixSettings(guildId, patch);
-    if (state) { state.mixSettings = settings; state.mixer?.configure(settings); prefetch(state); }
+    if (state) { state.mixSettings = settings; state.mixer?.configure(settings); prefetch(state); void panels.update(state); }
     return settings;
   }
 
@@ -68,13 +65,8 @@ export function createMusic(client, { recovery = true } = {}) {
 
   function announceTrack(state, track, transition) {
     if (sessions.get(state.guildId) !== state) return;
-    const embed = new EmbedBuilder().setColor('#9ACCF0').setTitle('🎵 Reproduciendo')
-      .setDescription(title(track)).addFields(
-        { name: 'Duración', value: track.info.isStream ? 'En vivo' : duration(track.info.length), inline: true },
-        { name: 'Solicitada por', value: `<@${track.requester}>`, inline: true }
-      );
-    if (transition) embed.addFields({ name: 'Transición', value: transition.fallback || `${transition.type} · ${transition.seconds.toFixed(1)} s${transition.type === 'dj' ? ' · ritmo sincronizado sin cambiar el tono' : ''}` });
-    void state.textChannel?.send({ embeds: [embed], components: controls(), allowedMentions: { parse: [] } }).catch(() => {});
+    state.panelTransition = transition || state.mixer?.lastTransition || null;
+    void panels.update(state);
   }
 
   function prefetch(state) {
@@ -127,8 +119,9 @@ export function createMusic(client, { recovery = true } = {}) {
     if (sessions.get(state.guildId) === state) await action();
   }).catch(error => console.error(`[Música] ${error.message}`));
 
-  async function destroy(state, { preserve = false, autoResume = true } = {}) {
+  async function destroy(state, { preserve = false, autoResume = true, updatePanel = true } = {}) {
     if (recovery) { if (preserve) checkpoint(state, { autoResume }); else sessionStore.delete(state.guildId); }
+    if (updatePanel) void panels.update(state, preserve ? 'saved' : 'stopped');
     clearTimeout(state.idleTimer);
     clearTimeout(state.emptyTimer);
     sessions.delete(state.guildId);
@@ -162,7 +155,7 @@ export function createMusic(client, { recovery = true } = {}) {
         track = state.queue.next('loadFailed');
       }
     }
-    checkpoint(state); idle(state);
+    checkpoint(state); void panels.update(state); idle(state);
   }
 
   async function connectSession(guild, channel, textChannel, saved = null) {
@@ -244,7 +237,7 @@ export function createMusic(client, { recovery = true } = {}) {
       await state.player.playTrack({ track: { encoded: track.encoded }, position: track.info.isStream ? 0 : position, paused });
     }
     state.starting = false;
-    checkpoint(state); prefetch(state);
+    checkpoint(state); prefetch(state); void panels.update(state);
   }
 
   async function restoreSession(guild, channel, textChannel, saved) {
@@ -308,12 +301,23 @@ export function createMusic(client, { recovery = true } = {}) {
     }
     console.log(`[Música] /${action}: recibido; antigüedad ${Date.now() - interaction.createdTimestamp}ms.`);
     try {
-      if (!await acknowledge(interaction)) return;
+      if (!await acknowledge(interaction, { ephemeral: action === 'reproductor' || Boolean(interaction.isButton?.() || interaction.isStringSelectMenu?.()) })) return;
       console.log(`[Música] /${action}: confirmado.`);
       if (action === 'play') await interaction.editReply({ content: '🎵 Preparando la música…', allowedMentions: { parse: [] } });
       const payload = await lock.run(interaction.guildId, async () => {
         let state = sessions.get(interaction.guildId);
         const saved = !state ? savedSession(interaction.guildId) : null;
+        if (action === 'reproductor') {
+          await checkVoice(interaction,state);
+          if (state) { state.textChannel=interaction.channel; if(!await panels.update(state,'playing',{force:true}))throw Error('No pude publicar el reproductor. Revisa Ver canal, Enviar mensajes e Insertar enlaces.'); }
+          else if (saved) {
+            const view={guildId:interaction.guildId,channelId:saved.voiceChannelId,textChannel:interaction.channel,
+              queue:{current:saved.current,tracks:saved.tracks,repeat:saved.repeat},volume:saved.volume,
+              starting:true,resumePosition:saved.position,player:{paused:saved.paused},mixSettings:getMixSettings(interaction.guildId),equalizer:getMusicEqualizer(interaction.guildId)};
+            sessionStore.save({...saved,textChannelId:interaction.channel.id});if(!await panels.update(view,'saved',{force:true}))throw Error('No pude publicar el reproductor. Revisa los permisos del canal.');
+          } else throw Error('No hay una cola activa ni guardada. Usa /play primero.');
+          return {content:'🎛️ Reproductor actualizado en este canal.'};
+        }
         if (saved && action === 'cola') return showQueue({ queue: { current: saved.current, tracks: saved.tracks, repeat: saved.repeat } }, interaction.options?.getInteger('pagina') ?? 1);
         if (saved && action === 'actual') return { content: '💾 Cola guardada. Usa /continuar desde un canal de voz para recuperarla.' };
         if (saved && action === 'detener') {
@@ -382,6 +386,19 @@ export function createMusic(client, { recovery = true } = {}) {
           return { content: `🎵 ${title(state.queue.current)} · ${duration(state.mixer?.position ?? state.player.position)} / ${state.queue.current.info.isStream ? 'En vivo' : duration(state.queue.current.info.length)} · Volumen ${state.volume}%${state.player.paused ? ' · En pausa' : ''} · ${state.mixingDisabled ? 'Normal (respaldo)' : MIX_MODES[state.mixSettings.mode]}` };
         }
         await checkVoice(interaction, state);
+        if (action === 'panel-refresh') { if(!await panels.update(state,'playing',{force:true}))throw Error('No pude actualizar el reproductor. Revisa los permisos del canal.'); return {content:'🎛️ Reproductor actualizado.'}; }
+        if (action === 'panel-mode') {
+          const mode=interaction.values?.[0];if(!Object.hasOwn(MIX_MODES,mode))throw Error('Modo de mezcla inválido.');
+          configureMix(state,interaction.guildId,{mode});return {content:'🎚️ '+MIX_MODES[mode]};
+        }
+        if (action === 'panel-repeat') {
+          state.queue.repeat=({off:'track',track:'queue',queue:'off'})[state.queue.repeat];
+          return {content:'🔁 Repetición: '+({off:'desactivada',track:'canción actual',queue:'toda la cola'})[state.queue.repeat]};
+        }
+        if (action === 'panel-volume-down' || action === 'panel-volume-up') {
+          const value=Math.max(0,Math.min(100,state.volume+(action==='panel-volume-up'?5:-5)));
+          await state.player.setGlobalVolume(value);state.volume=value;return {content:'🔊 Volumen: '+value+'%.'};
+        }
         if (action === 'detener') { await destroy(state); return { content: '⏹️ Detuve la música, vacié la cola y salí del canal.' }; }
         if (['pausa', 'continuar', 'toggle'].includes(action)) {
           if (!state.queue.current) throw new Error('No hay una canción sonando.');
@@ -425,7 +442,7 @@ export function createMusic(client, { recovery = true } = {}) {
         throw new Error('Control de música desconocido.');
       });
       const active = sessions.get(interaction.guildId);
-      if (active) checkpoint(active);
+      if (active) { checkpoint(active); void panels.update(active); }
       await interaction.editReply({ ...payload, allowedMentions: { parse: [] } });
       console.log(`[Música] /${action}: completado.`);
     } catch (error) {
@@ -462,7 +479,8 @@ export function createMusic(client, { recovery = true } = {}) {
   client.on('guildDelete', guild => {
     const state = sessions.get(guild.id);
     if (recovery) sessionStore.delete(guild.id);
-    if (state) event(state, () => destroy(state));
+    panels.remove(guild.id);
+    if (state) event(state, () => destroy(state,{updatePanel:false}));
   });
 
   client.on('guildUpdate', (oldGuild, guild) => {
@@ -501,8 +519,9 @@ export function createMusic(client, { recovery = true } = {}) {
         automix: state.mixSettings, transition: state.mixer?.lastTransition || null, mixingDisabled: Boolean(state.mixingDisabled) } : null;
     },
     handleButton: interaction => run(interaction, interaction.customId.slice('music:'.length)),
+    handleSelect: interaction => run(interaction, interaction.customId.slice('music:'.length)),
     close: async ({ preserve = false } = {}) => {
-      closing = true; clearInterval(checkpointTimer); clearInterval(recoveryTimer);
+      closing = true; clearInterval(checkpointTimer); clearInterval(recoveryTimer); clearInterval(panelTimer);
       await Promise.all([...sessions.values()].map(state => lock.run(state.guildId, () => destroy(state, { preserve }))));
       for (const name of [...shoukaku.nodes.keys()]) shoukaku.removeNode(name);
     }

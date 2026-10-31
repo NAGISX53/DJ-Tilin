@@ -6,7 +6,7 @@ import { config } from '../src/config.js';
 import { createMusic } from '../src/music/index.js';
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
-const music = createMusic(client, { recovery: false });
+const music = createMusic(client, { recovery: false, panelStorage: { read:()=>null,save:()=>{},delete:()=>{} } });
 const transitions = process.argv.includes('--transiciones');
 const equalizerTest = process.argv.includes('--ecualizador');
 const automixTest = process.argv.includes('--automix');
@@ -34,10 +34,14 @@ try {
   const member = await guild.members.fetch(config.discord.ownerId);
   if (!member.voice.channel) throw Error('El propietario debe estar conectado a voz.');
   const starts = [];
-  const channel = { send: async payload => {
-    console.log('Aviso:', payload.content || payload.embeds?.[0]?.data?.title);
-    if (payload.embeds?.[0]?.data?.title === '🎵 Reproduciendo') starts.push(performance.now());
-  } };
+  let lastDescription;
+  const capture = async payload => {
+    const embed=payload.embeds?.[0]?.data;
+    console.log('Aviso:',payload.content || embed?.title);
+    if(embed?.title==='🎵 Reproduciendo' && embed.description!==lastDescription) { starts.push(performance.now());lastDescription=embed.description; }
+    return {id:'test-panel'};
+  };
+  const channel={id:'test-channel',send:capture,messages:{edit:async(_,payload)=>capture(payload)}};
   let reply;
   const command = (action, query) => music.run({
     inGuild: () => true, guildId: guild.id, guild, user: member.user, channel,
