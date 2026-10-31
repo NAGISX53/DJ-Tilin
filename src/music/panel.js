@@ -40,7 +40,7 @@ export function renderPanel(state, phase='playing') {
   embed.setFooter({text:(state.guildName || 'Música del servidor')+' · Progreso actualizado cada 15 s'+(saved?' · Usa Recuperar cola o /continuar':'')});
   const rows=[new ActionRowBuilder().addComponents(
     button(saved?'continuar':'toggle',saved?'Recuperar cola':paused?'▶ Continuar':'Ⅱ Pausa',stopped||(!current&&!saved),ButtonStyle.Primary),
-    button('saltar','Saltar',!playing),button('cola','Cola',stopped),button('detener','Detener',stopped,ButtonStyle.Danger)),
+    button('saltar','Saltar',!playing),button('cola','Cola',stopped),button('detener','Detener',stopped,ButtonStyle.Danger),button('panel-favorite','♡ Favorita',stopped||!current)),
     new ActionRowBuilder().addComponents(button('panel-volume-down','Volumen −5',!active||state.volume<=0),button('panel-volume-up','Volumen +5',!active||state.volume>=100),
       button('panel-repeat','Repetir',!active),button('mezclar','Aleatorio',!active||state.queue.tracks.length<2),button('panel-refresh','Actualizar',!active)),
     new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('music:panel-mode').setPlaceholder('Modo de mezcla').setDisabled(!active)

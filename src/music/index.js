@@ -1,7 +1,7 @@
 import { Shoukaku, Connectors } from 'shoukaku';
 import { ChannelType, EmbedBuilder, PermissionFlagsBits, escapeMarkdown } from 'discord.js';
 import { config } from '../config.js';
-import { GuildLock, MusicQueue, identifier, MAX_QUEUE } from './queue.js';
+import { GuildLock, MusicQueue, identifier, MAX_QUEUE, shuffleTracks } from './queue.js';
 import { playableTrack, resolveTracks } from './sources.js';
 import { TrackPreparation } from './preparation.js';
 import { AudioQuality } from './quality.js';
@@ -12,7 +12,7 @@ import { getMusicEqualizer, setMusicEqualizer, getMixSettings, saveMixSettings }
 import { analyze } from './analysis.js';
 import { MixSession } from './mixer.js';
 import { sessionSnapshot } from './recovery.js';
-import { sessionStore, panelStore } from '../db.js';
+import { sessionStore, panelStore, musicLibrary } from '../db.js';
 import { MusicPanels } from './panel.js';
 import { SearchPicks, searchTracks, searchPayload } from './search.js';
 import { MIX_MODES } from './mix-settings.js';
@@ -282,7 +282,8 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
       if (!channel.permissionsFor(me)?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak])) {
         throw new Error('Necesito los permisos Ver canal, Conectar y Hablar en tu canal de voz.');
       }
-      if (channel.full && !channel.permissionsFor(me).has(PermissionFlagsBits.MoveMembers)) throw new Error('El canal de voz está lleno.');
+      const alreadyJoined = me.voice?.channelId === channel.id || state?.channelId === channel.id;
+      if (channel.full && !alreadyJoined && !channel.permissionsFor(me).has(PermissionFlagsBits.MoveMembers)) throw new Error('El canal de voz está lleno.');
     }
     return channel;
   }
@@ -326,7 +327,7 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
     }
     console.log(`[Música] /${action}: recibido; antigüedad ${Date.now() - interaction.createdTimestamp}ms.`);
     try {
-      if (!await acknowledge(interaction, { ephemeral: action === 'buscar' || action === 'reproductor' || Boolean(interaction.isButton?.() || interaction.isStringSelectMenu?.()) })) return;
+      if (!await acknowledge(interaction, { ephemeral: ['favoritos','playlist'].includes(action) || action === 'buscar' || action === 'reproductor' || Boolean(interaction.isButton?.() || interaction.isStringSelectMenu?.()) })) return;
       console.log(`[Música] /${action}: confirmado.`);
       const context={guildId:interaction.guildId,userId:interaction.user.id};
       if(action==='buscar') {
@@ -365,6 +366,49 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
       const payload = await lock.run(interaction.guildId, async () => {
         let state = sessions.get(interaction.guildId);
         const saved = !state ? savedSession(interaction.guildId) : null;
+        if (['favoritos','playlist','panel-favorite'].includes(action)) {
+          const kind=action==='playlist'?'playlist':'favorite',owner=interaction.user.id;
+          const sub=action==='panel-favorite'?'guardar':interaction.options.getSubcommand();
+          const name=interaction.options?.getString('nombre');
+          const page=interaction.options?.getInteger('pagina') || 1;
+          if(sub==='lista'){
+            const entries=musicLibrary.list(owner,kind),pages=Math.max(1,Math.ceil(entries.length/10));
+            if(page>pages)throw Error('Esta biblioteca solo tiene '+pages+' página(s).');
+            const rows=entries.slice((page-1)*10,page*10).map((row,i)=>((page-1)*10+i+1)+'. **'+safe(row.name)+'** · '+row.count+' canción(es)');
+            return {embeds:[new EmbedBuilder().setColor('#9ACCF0').setTitle(kind==='favorite'?'♡ Tus favoritos':'🎶 Tus playlists').setDescription(rows.join('\n') || 'Todavía no has guardado nada.').setFooter({text:'Página '+page+'/'+pages+' · Biblioteca personal'})]};
+          }
+          if(sub==='guardar'){
+            await checkVoice(interaction,state);
+            const current=state?.queue.current || saved?.current;
+            const tracks=kind==='favorite'?[current].filter(Boolean):[current,...(state?.queue.tracks || saved?.tracks || [])].filter(Boolean);
+            if(!tracks.length)throw Error('No hay una canción o cola para guardar.');
+            const label=name || String(current.info.title).normalize('NFKC').slice(0,80);
+            const result=musicLibrary.save(owner,kind,label,tracks,{replace:interaction.options?.getBoolean('reemplazar')===true});
+            return {content:(result.duplicate?'♡ Ya estaba en tus favoritos: ':'💾 Guardé ')+(kind==='playlist'?'la playlist ':'')+'**'+safe(result.name)+'** · '+result.count+' canción(es).'};
+          }
+          if(sub==='quitar'||sub==='borrar'){
+            if(!musicLibrary.remove(owner,kind,name))throw Error('No encontré ese nombre en tu biblioteca.');
+            return {content:'🗑️ Eliminé **'+safe(name)+'** de tu biblioteca.'};
+          }
+          const entry=musicLibrary.get(owner,kind,name);
+          if(sub==='ver'){
+            const pages=Math.max(1,Math.ceil(entry.tracks.length/10));if(page>pages)throw Error('Esta playlist solo tiene '+pages+' página(s).');
+            const rows=entry.tracks.slice((page-1)*10,page*10).map((track,i)=>((page-1)*10+i+1)+'. '+safe((track.info.title+' — '+track.info.author).slice(0,130)));
+            return {embeds:[new EmbedBuilder().setColor('#9ACCF0').setTitle('🎶 '+safe(entry.name)).setDescription(rows.join('\n')).setFooter({text:'Página '+page+'/'+pages+' · '+entry.tracks.length+' canciones'})]};
+          }
+          if(sub==='reproducir'){
+            const shuffled=interaction.options?.getBoolean('aleatorio')===true;
+            let result;
+            if(entry.tracks.length>MAX_QUEUE&&!state?.queue.current&&!state?.queue.tracks.length&&!saved){
+              if(shuffled)shuffleTracks(entry.tracks);
+              const first=await enqueue(interaction,entry.tracks.slice(0,1));
+              const rest=await enqueue(interaction,entry.tracks.slice(1),{shuffled});
+              result={added:first.added+rest.added,omitted:first.omitted+rest.omitted};
+            }else result=await enqueue(interaction,entry.tracks,{shuffled});
+            return {content:'✅ Añadí '+result.added+' canción(es) de **'+safe(entry.name)+'** a la cola.'+(result.omitted?' Se omitieron '+result.omitted+' por el límite de la cola.':'')+(shuffled?' 🔀 Aleatorio compatible con AutoMix.':'')};
+          }
+          throw Error('Acción de biblioteca desconocida.');
+        }
         if (action === 'reproductor') {
           await checkVoice(interaction,state);
           if (state) { state.textChannel=interaction.channel; if(!await panels.update(state,'playing',{force:true}))throw Error('No pude publicar el reproductor. Revisa Ver canal, Enviar mensajes e Insertar enlaces.'); }
@@ -565,6 +609,10 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
       return state ? { channelId: state.channelId, position: state.mixer?.position ?? state.player.position, playing: Boolean(state.queue.current), paused: state.player.paused,
         preloaded: state.queue.tracks.slice(0, 2).filter(track => track.localAudio).length, equalizer: state.equalizer,
         automix: state.mixSettings, transition: state.mixer?.lastTransition || null, mixingDisabled: Boolean(state.mixingDisabled) } : null;
+    },
+    handleAutocomplete: async interaction => {
+      try { const kind=interaction.commandName==='playlist'?'playlist':'favorite';await interaction.respond(musicLibrary.names(interaction.user.id,kind,interaction.options.getFocused())); }
+      catch(error) { console.warn('[Biblioteca] '+error.message);await interaction.respond([]).catch(()=>{}); }
     },
     handleButton: interaction => run(interaction, interaction.customId.slice('music:'.length)),
     handleSelect: interaction => run(interaction, interaction.customId.slice('music:'.length)),

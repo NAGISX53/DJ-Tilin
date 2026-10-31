@@ -20,7 +20,7 @@ La carpeta del repositorio puede tener cualquier nombre; los accesos se resuelve
 ## Estructura
 
 - src/music: reproducción, cola, descargas, análisis y mezclador.
-- src/commands: los 16 comandos musicales.
+- src/commands: los 18 comandos musicales.
 - src/web: panel y acceso local/OAuth.
 - lavalink/tilin-audio/src: código Java del plugin y su prueba nativa.
 - scripts: instalación, compilación, arranque y verificaciones.
@@ -28,7 +28,7 @@ La carpeta del repositorio puede tener cualquier nombre; los accesos se resuelve
 
 ## Uso
 Entra a voz y usa /play busqueda:Daft Punk Get Lucky.
-Comandos: /buscar, /reproductor, /play, /pausa, /continuar, /saltar, /detener, /actual, /calidad, /automix, /ecualizador, /cola, /volumen, /repetir, /mezclar y /quitar.
+Comandos: /favoritos, /playlist, /buscar, /reproductor, /play, /pausa, /continuar, /saltar, /detener, /actual, /calidad, /automix, /ecualizador, /cola, /volumen, /repetir, /mezclar y /quitar.
 
 AutoMix ofrece normal, crossfade, smart y dj; fundidos de 3–15 segundos, sincronización de ritmos compatibles y normalización. Conserva el tono al ajustar el tempo. El análisis es heurístico y usa crossfade si la sincronización no resulta fiable. Configuración inicial: Smart Mix, 6 segundos, sincronización y normalización activadas. Los ajustes y el ecualizador persisten en SQLite.
 
@@ -55,7 +55,7 @@ Sin aleatorio:true se respeta el orden original. /mezclar baraja toda la cola pe
 
 [Invitar al bot oficial](https://discord.com/oauth2/authorize?client_id=1548060851263770745&permissions=3165184&integration_type=0&scope=bot%20applications.commands)
 
-Necesitas Gestionar servidor para instalarlo. Después de autorizarlo, entra a un canal de voz y usa /play. Los 16 comandos se registran globalmente, solo para servidores; DISCORD_GUILD_ID ya no restringe el uso. La instalación en una cuenta personal no incorpora al bot a canales de voz. Cada servidor conserva su cola, volumen de reproducción, repetición, ecualizador y AutoMix independientes. Una sola instancia puede servir a varios servidores; la capacidad depende de la PC y de su conexión.
+Necesitas Gestionar servidor para instalarlo. Después de autorizarlo, entra a un canal de voz y usa /play. Los 18 comandos se registran globalmente, solo para servidores; DISCORD_GUILD_ID ya no restringe el uso. La instalación en una cuenta personal no incorpora al bot a canales de voz. Cada servidor conserva su cola, volumen de reproducción, repetición, ecualizador y AutoMix independientes. Una sola instancia puede servir a varios servidores; la capacidad depende de la PC y de su conexión.
 
 Los permisos predeterminados son Ver canales, Enviar mensajes, Insertar enlaces, Conectar y Hablar. Gestionar canales es opcional y permite al bot elevar el bitrate del canal; sin él respeta el configurado. No solicita Administrador. En el panel local, el dueño puede seleccionar un servidor instalado; los accesos autorizados antiguos se limitan a su propio servidor. Los demás usuarios configuran la música con los comandos de Discord desde su canal de voz.
 
@@ -87,6 +87,23 @@ El menú dura cinco minutos, pertenece únicamente a quien lo pidió y se usa un
 
 Los filtros añaden términos a la búsqueda y las etiquetas se deducen del título; no certifican que un resultado sea una versión oficial, original o extendida. El usuario decide con la información de cada resultado. No se descargan las cinco alternativas: solo la elegida.
 
-Estado del paso 3: 80 pruebas aprobadas, consulta real con cinco versiones comprobada y comando instalado; pendiente de confirmación del menú en Discord. Los pasos siguientes son favoritos/playlists guardadas, rol DJ/votaciones y análisis musical más avanzado.
+Paso 3 verificado por el usuario: el comando aparece y permite elegir la versión.
 
 Si los comandos globales nuevos tardan en aparecer, registrar-comandos.cmd también sincroniza una copia idéntica en DISCORD_GUILD_ID, cuando está configurado. El resto de servidores conserva los comandos globales.
+
+## Favoritos y playlists guardadas — paso 4
+
+La biblioteca pertenece a tu usuario de Discord y puedes utilizarla en los servidores donde esté instalado el bot. Los listados, el autocompletado y las confirmaciones son privados. Se guarda en SQLite; no contiene archivos de audio y no se publica en GitHub.
+
+- /favoritos guardar: guarda la canción actual; nombre es opcional. También puedes pulsar ♡ Favorita en el reproductor. Guardar la misma versión otra vez no crea un duplicado.
+- /favoritos lista, /favoritos reproducir nombre:… y /favoritos quitar nombre:… administran tus canciones.
+- /playlist guardar nombre:Fiesta: guarda la canción actual y las pendientes, en su orden y con los duplicados que haya.
+- /playlist lista y /playlist ver nombre:Fiesta: consultan tus listas y sus canciones, por páginas.
+- /playlist reproducir nombre:Fiesta: añade la lista a la cola; aleatorio:true permite la selección compatible con AutoMix.
+- /playlist borrar nombre:Fiesta: elimina tu lista guardada.
+
+Los nombres se autocompletan y no distinguen mayúsculas. No se sobrescribe una lista con el mismo nombre salvo que indiques reemplazar:true. Cada usuario puede guardar hasta 100 favoritos y 30 playlists de hasta 201 canciones (la actual y 200 pendientes). Los identificadores de versiones ya resueltas se conservan; Spotify pendiente de resolver mantiene su búsqueda de audio. Al reproducir se respeta la capacidad restante de la cola y se informa de cualquier omisión. Una lista de 201 canciones puede iniciarse completa cuando el reproductor está vacío. El orden aleatorio se activa al reproducir y no modifica el contenido guardado.
+
+Guardar canciones o colas y reproducirlas requiere estar en voz; si el bot está activo, en su mismo canal. Consultar o eliminar tu biblioteca no requiere entrar a voz. Nadie puede acceder mediante estos comandos a la biblioteca de otro usuario.
+
+Paso 4 verificado por el usuario: favoritos y playlists se guardan y vuelven a añadirse correctamente.

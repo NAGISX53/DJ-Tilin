@@ -1,3 +1,4 @@
+import { MusicLibrary } from './music/library.js';
 import { SessionStore } from './music/recovery.js';
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
@@ -56,3 +57,5 @@ export const panelStore = {
   save: (guildId, record) => db.prepare('INSERT INTO music_panels(guild_id,channel_id,message_id) VALUES (?,?,?) ON CONFLICT(guild_id) DO UPDATE SET channel_id=excluded.channel_id,message_id=excluded.message_id').run(guildId,record.channelId,record.messageId),
   delete: guildId => db.prepare('DELETE FROM music_panels WHERE guild_id=?').run(guildId)
 };
+
+export const musicLibrary = new MusicLibrary(db);

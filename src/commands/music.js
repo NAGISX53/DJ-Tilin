@@ -15,6 +15,17 @@ export const musicCommands = [
     .addStringOption(o => o.setName('version').setDescription('Tipo de versión que quieres encontrar').addChoices(
       {name:'Todas',value:'all'},{name:'Estudio / oficial',value:'original'},{name:'Remix',value:'remix'},
       {name:'En directo',value:'live'},{name:'Extendida',value:'extended'},{name:'Instrumental',value:'instrumental'}))),
+  command('favoritos', 'Guarda y reproduce tus canciones favoritas.', data => data
+    .addSubcommand(s=>s.setName('guardar').setDescription('Guarda la canción actual.').addStringOption(o=>o.setName('nombre').setDescription('Nombre opcional para reconocerla').setMaxLength(80)).addBooleanOption(o=>o.setName('reemplazar').setDescription('Permitir reemplazar un nombre que ya existe')))
+    .addSubcommand(s=>s.setName('lista').setDescription('Muestra tus favoritos.').addIntegerOption(o=>o.setName('pagina').setDescription('Página').setMinValue(1).setMaxValue(10)))
+    .addSubcommand(s=>s.setName('reproducir').setDescription('Añade un favorito a la cola.').addStringOption(o=>o.setName('nombre').setDescription('Tu favorito').setRequired(true).setAutocomplete(true)))
+    .addSubcommand(s=>s.setName('quitar').setDescription('Elimina uno de tus favoritos.').addStringOption(o=>o.setName('nombre').setDescription('Tu favorito').setRequired(true).setAutocomplete(true)))),
+  command('playlist', 'Guarda y recupera tus propias listas de canciones.', data => data
+    .addSubcommand(s=>s.setName('guardar').setDescription('Guarda canción actual y cola pendiente.').addStringOption(o=>o.setName('nombre').setDescription('Nombre de tu playlist').setRequired(true).setMaxLength(80)).addBooleanOption(o=>o.setName('reemplazar').setDescription('Permitir reemplazar una lista existente')))
+    .addSubcommand(s=>s.setName('lista').setDescription('Muestra tus playlists guardadas.').addIntegerOption(o=>o.setName('pagina').setDescription('Página').setMinValue(1).setMaxValue(10)))
+    .addSubcommand(s=>s.setName('ver').setDescription('Consulta las canciones de una playlist.').addStringOption(o=>o.setName('nombre').setDescription('Tu playlist').setRequired(true).setAutocomplete(true)).addIntegerOption(o=>o.setName('pagina').setDescription('Página').setMinValue(1).setMaxValue(21)))
+    .addSubcommand(s=>s.setName('reproducir').setDescription('Añade una playlist a la cola.').addStringOption(o=>o.setName('nombre').setDescription('Tu playlist').setRequired(true).setAutocomplete(true)).addBooleanOption(o=>o.setName('aleatorio').setDescription('Aleatorio compatible con Smart Mix y DJ')))
+    .addSubcommand(s=>s.setName('borrar').setDescription('Borra una de tus playlists guardadas.').addStringOption(o=>o.setName('nombre').setDescription('Tu playlist').setRequired(true).setAutocomplete(true)))),
   command('pausa', 'Pausa la música.'),
   command('continuar', 'Continúa la reproducción.'),
   command('saltar', 'Salta a la siguiente canción.'),

@@ -16,3 +16,5 @@ Puedes invitar DJ Tilin a otros servidores con el enlace de INVITAR-BOT.txt. Las
 El reproductor se actualiza en un solo mensaje. Usa /reproductor desde voz para mostrarlo en otro canal de texto; los controles confirman en privado.
 
 Para elegir entre distintas versiones, usa /buscar con canción/artista y el filtro opcional version. Elige una de las cinco coincidencias privadas para añadirla a la cola.
+
+Puedes guardar la canción con ♡ Favorita o /favoritos guardar. Guarda una cola con /playlist guardar nombre:Fiesta y recupérala con /playlist reproducir nombre:Fiesta. Tu biblioteca es personal y persiste tras reiniciar.

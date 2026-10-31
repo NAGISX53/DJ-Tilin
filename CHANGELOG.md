@@ -37,12 +37,19 @@ Los fallos de análisis usan fundido sencillo; los fallos del mezclador tienen r
 - Actualizaciones serializadas; reemplazo de mensajes borrados y reutilización tras reiniciar.
 - 68 pruebas aprobadas y controles confirmados por el usuario en Discord.
 
-## Elegir versiones — tercera mejora en validación
+## Elegir versiones — tercera mejora verificada
 
 - /buscar con cinco coincidencias, duración, artista, enlaces y filtros de versión.
 - Menús privados, ligados al usuario/servidor/canal de voz, con caducidad y selección única.
 - Se conserva el identificador exacto del resultado elegido y se utiliza la cola musical existente.
 - Las búsquedas no mantienen bloqueados los controles de reproducción; las respuestas antiguas no sustituyen búsquedas nuevas.
-- 80 pruebas aprobadas y búsqueda real comprobada; pendiente de validar el menú con el usuario.
+- 80 pruebas aprobadas; el usuario confirmó que /buscar aparece y permite seleccionar una versión.
 
 - Disponibilidad de /buscar: el despliegue conserva los comandos globales y sincroniza una copia idéntica en el servidor configurado para publicación inmediata.
+
+## Biblioteca personal — cuarta mejora verificada
+
+- Favoritos con botón en el reproductor y comandos guardar/lista/reproducir/quitar.
+- Playlists personales con guardar/ver/lista/reproducir/borrar, autocompletado y orden aleatorio compatible con AutoMix.
+- Persistencia en SQLite, aislamiento por usuario, protección frente a reemplazos accidentales y límites de capacidad.
+- 94 pruebas aprobadas y favoritos/playlists confirmados por el usuario.

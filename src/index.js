@@ -14,7 +14,9 @@ client.once(Events.ClientReady, c => {
 client.on(Events.InteractionCreate, async interaction => {
   try {
     if (!interaction.inGuild()) return;
-    if (interaction.isChatInputCommand()) {
+    if (interaction.isAutocomplete()) {
+      await client.music.handleAutocomplete(interaction);
+    } else if (interaction.isChatInputCommand()) {
       const cmd = commandMap.get(interaction.commandName);
       if (cmd) await cmd.execute(interaction);
     } else if (interaction.isStringSelectMenu() && interaction.customId.startsWith('music:')) {
