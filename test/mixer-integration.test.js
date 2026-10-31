@@ -79,3 +79,18 @@ test('playlist aleatoria en DJ: elige la compatible y reproduce todas una sola v
     await rm(directory,{recursive:true,force:true});
   }
 });
+
+for (const mode of ['normal','crossfade','smart','dj']) test('recuperación con audio real '+mode+': posición guardada y pausa',async()=>{
+ const directory=await mkdtemp(path.join(tmpdir(),'tilin-resume-'));let session;
+ try{
+  const filePath=path.join(directory,'resume.wav');await fixture(filePath,330);
+  const track={filePath,info:{length:1000},analysis:{duration:1,intro:0,outro:1,bpm:120,confidence:0.9,beatOffset:0}};
+  session=new MixSession({track,settings:{...DEFAULT_MIX,mode},startPosition:600,paused:true,pace:false,peek:()=>null,ready:()=>true,prepare:async()=>{},next:()=>null,onTrack:()=>{},onError:()=>{}});
+  const url=await session.url();session.activate();const response=await fetch(url);let finished=false;
+  const data=response.arrayBuffer().then(value=>{finished=true;return value;});
+  await new Promise(resolve=>setTimeout(resolve,80));assert.equal(finished,false);assert.equal(session.position,600);
+  session.pause(false);const bytes=await data;const seconds=(bytes.byteLength-44)/(48000*4);
+  assert(seconds>=0.39&&seconds<0.46,'Se reprodujo desde el principio en lugar de la posición guardada: '+seconds);
+  assert.equal(session.failure,undefined);
+ }finally{session?.stop();await new Promise(resolve=>setTimeout(resolve,100));await rm(directory,{recursive:true,force:true});}
+});

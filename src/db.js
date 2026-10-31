@@ -1,3 +1,4 @@
+import { SessionStore } from './music/recovery.js';
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -46,3 +47,5 @@ export function getMusicEqualizer(guildId) {
 export function setMusicEqualizer(guildId, mode) {
   db.prepare('INSERT INTO music_preferences(guild_id,equalizer) VALUES (?,?) ON CONFLICT(guild_id) DO UPDATE SET equalizer=excluded.equalizer').run(guildId, mode);
 }
+
+export const sessionStore = new SessionStore(db);

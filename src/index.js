@@ -30,8 +30,22 @@ client.on(Events.InteractionCreate, async interaction => {
 });
 client.on(Events.Error, error => console.error('[DISCORD]', error.message));
 await client.login(config.discord.token);
-const { setDiscordStatusProvider, setMusicStatusProvider, setMusicControl } = await import('./web/server.js');
+const { setDiscordStatusProvider, setMusicStatusProvider, setMusicControl, setShutdownHandler } = await import('./web/server.js');
 setDiscordStatusProvider(() => client.isReady());
 setMusicStatusProvider(client.music.isReady);
 setMusicControl(client.music);
 
+
+let stopping = false;
+async function shutdown() {
+  if (stopping) return;
+  stopping = true;
+  client.music.checkpoint();
+  const deadline = setTimeout(() => process.exit(1), 8000).unref();
+  try { await client.music.close({ preserve: true }); client.destroy(); }
+  catch (error) { console.error('[CIERRE]', error.message); }
+  finally { clearTimeout(deadline); process.exit(0); }
+}
+setShutdownHandler(shutdown);
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

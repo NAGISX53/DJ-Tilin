@@ -74,8 +74,10 @@ class Decoder {
 }
 
 export class MixSession {
-  constructor({ track, settings, peek, ready, prepare, next, onTrack, onError, pace = true }) {
+  constructor({ track, settings, peek, ready, prepare, next, onTrack, onError, pace = true, startPosition = 0, initialRate = 1, paused = false }) {
     this.firstTrack = track;
+    this.startPosition = Math.max(0, startPosition);
+    this.firstPlan = { cue: this.startPosition / 1000, incomingRate: initialRate };
     this.settings = { ...settings };
     this.peek = peek; this.ready = ready; this.prepare = prepare; this.next = next;
     this.onTrack = onTrack; this.onError = onError;
@@ -83,7 +85,7 @@ export class MixSession {
     this.abort = new AbortController();
     this.blender = new StereoBlend();
     this.path = `/music/${randomBytes(24).toString('hex')}.wav`;
-    this.active = false; this.finished = false; this.stopped = false; this.paused = false;
+    this.active = false; this.finished = false; this.stopped = false; this.paused = paused;
     this.rendered = 0; this.lastTransition = null;
   }
   async url() {
@@ -95,14 +97,14 @@ export class MixSession {
   pause(value) { this.paused = value; }
   skip() { this.skipRequested = true; }
   get position() {
-    return this.current ? Math.floor((this.current.cue + this.current.decoder.frames * 0.02 * this.current.rate) * 1000) : 0;
+    return this.current ? Math.floor((this.current.cue + this.current.decoder.frames * 0.02 * this.current.rate) * 1000) : this.startPosition;
   }
   open(track, plan = { cue: 0, incomingRate: 1 }) {
     const analysis = track.analysis;
     const smart = ['smart', 'dj'].includes(this.settings.mode);
-    const cue = smart ? Math.max(plan.cue || 0, analysis?.intro || 0) : 0;
     const end = smart ? analysis?.outro : analysis?.duration;
     const duration = end || track.info.length / 1000;
+    const cue = Math.min(Math.max(plan.cue || 0, smart ? analysis?.intro || 0 : 0), Math.max(0, duration - 0.02));
     const rate = plan.incomingRate || 1;
     if (!track.filePath || !duration) throw Error('Esta canción no tiene audio local apto para mezclar.');
     return { track, cue, end: duration, rate,
@@ -168,7 +170,7 @@ export class MixSession {
   }
   async run() {
     this.deadline = performance.now();
-    this.current = this.open(this.firstTrack);
+    this.current = this.open(this.firstTrack, this.firstPlan);
     while (!this.stopped) {
       while (this.paused && !this.stopped) { await delay(25, undefined, { signal: this.abort.signal }); this.deadline = performance.now(); }
       if (this.skipRequested) {

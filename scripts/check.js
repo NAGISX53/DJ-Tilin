@@ -17,6 +17,12 @@ function syntax(dir) {
   }
 }
 syntax(path.join(root,'src'));
+if (process.platform === 'win32') {
+  const parse = 'Get-ChildItem -LiteralPath scripts -Filter *.ps1 | ForEach-Object { $parseErrors=$null; $parseTokens=$null; [System.Management.Automation.Language.Parser]::ParseFile($_.FullName,[ref]$parseTokens,[ref]$parseErrors) | Out-Null; if ($parseErrors.Count) { $parseErrors | ForEach-Object { Write-Output $_.Message }; exit 1 } }';
+  const result = spawnSync('powershell.exe',['-NoProfile','-Command',parse],{encoding:'utf8',windowsHide:true});
+  assert.equal(result.status,0,result.stdout + result.stderr);
+}
+
 assert.throws(() => validateConfig({discord:{},dashboard:{port:3000}}), /DISCORD_TOKEN/);
 const dir = mkdtempSync(path.join(tmpdir(),'tilin-check-'));
 process.chdir(dir);

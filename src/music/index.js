@@ -11,6 +11,8 @@ import { applyEqualizer, EQ_NAMES } from './equalizer.js';
 import { getMusicEqualizer, setMusicEqualizer, getMixSettings, saveMixSettings } from '../db.js';
 import { analyze } from './analysis.js';
 import { MixSession } from './mixer.js';
+import { sessionSnapshot } from './recovery.js';
+import { sessionStore } from '../db.js';
 import { MIX_MODES } from './mix-settings.js';
 
 const safe = text => escapeMarkdown(String(text || 'Desconocido').slice(0, 130));
@@ -26,17 +28,32 @@ const controls = () => [new ActionRowBuilder().addComponents(
   new ButtonBuilder().setCustomId('music:detener').setLabel('Detener').setStyle(ButtonStyle.Danger)
 )];
 
-export function createMusic(client) {
+export function createMusic(client, { recovery = true } = {}) {
   cleanAudioCache().catch(error => console.warn(`[Música] Caché: ${error.message}`));
   const shoukaku = new Shoukaku(new Connectors.DiscordJS(client), [{
     name: 'tilin-music', url: `${config.lavalink.host}:${config.lavalink.port}`,
     auth: config.lavalink.password, secure: config.lavalink.secure
   }], { resume: true, resumeTimeout: 60, reconnectTries: 5, restTimeout: 30 });
-  shoukaku.on('ready', name => console.log(`[Música] ${name} conectado.`));
+  shoukaku.on('ready', name => { console.log(`[Música] ${name} conectado.`); recoverSaved().catch(reportRecoveryError); });
   shoukaku.on('error', (name, error) => console.error(`[Música] ${name}: ${error.message}`));
   const sessions = new Map();
   const lock = new GuildLock();
   const quality = new AudioQuality();
+  let closing = false;
+  const savedSession = guildId => recovery ? sessionStore.read(guildId) : null;
+  function checkpoint(state, patch = {}) {
+    if (!recovery || sessions.get(state.guildId) !== state) return;
+    sessionStore.save({ ...sessionSnapshot(state), ...patch });
+  }
+  function checkpointAll() {
+    for (const state of sessions.values()) try { checkpoint(state); }
+    catch (error) { console.warn('[Recuperación] No pude guardar: ' + error.message); }
+  }
+  const reportRecoveryError = error => console.warn('[Recuperación] ' + error.message);
+  const checkpointTimer = setInterval(checkpointAll, 3000).unref();
+  const recoveryTimer = setInterval(() => { recoverSaved().catch(reportRecoveryError); }, 30000).unref();
+  client.once('clientReady', () => { recoverSaved().catch(reportRecoveryError); });
+
 
   function configureMix(state, guildId, patch) {
     const settings = saveMixSettings(guildId, patch);
@@ -71,10 +88,10 @@ export function createMusic(client) {
     return state.queue.tracks[0] || (reason === 'finished' && state.queue.repeat === 'queue' ? state.queue.current : null);
   }
 
-  async function startMix(state, track) {
+  async function startMix(state, track, { position = 0, paused = false, rate = 1 } = {}) {
     state.mixer?.stop();
     const mixer = new MixSession({
-      track, settings: state.mixSettings,
+      track, settings: state.mixSettings, startPosition: position, initialRate: rate, paused,
       peek: () => selectNext(state),
       ready: item => state.preparation.ready.has(item),
       prepare: item => state.preparation.prepare(item),
@@ -87,7 +104,7 @@ export function createMusic(client) {
         prefetch(state);
         return next;
       },
-      onTrack: (next, transition) => announceTrack(state, next, transition),
+      onTrack: (next, transition) => { checkpoint(state); announceTrack(state, next, transition); },
       onError: error => console.warn(`[AutoMix] ${error.message}`)
     });
     try {
@@ -95,7 +112,7 @@ export function createMusic(client) {
       if (result?.loadType !== 'track') throw Error('El motor no pudo abrir el mezclador.');
       state.mixer = mixer; state.streamEncoded = result.data.encoded;
       mixer.activate();
-      await state.player.playTrack({ track: { encoded: result.data.encoded }, paused: false });
+      await state.player.playTrack({ track: { encoded: result.data.encoded }, paused });
     } catch (error) { mixer.stop(); state.mixer = null; state.streamEncoded = null; throw error; }
   }
 
@@ -110,12 +127,13 @@ export function createMusic(client) {
     if (sessions.get(state.guildId) === state) await action();
   }).catch(error => console.error(`[Música] ${error.message}`));
 
-  async function destroy(state) {
+  async function destroy(state, { preserve = false, autoResume = true } = {}) {
+    if (recovery) { if (preserve) checkpoint(state, { autoResume }); else sessionStore.delete(state.guildId); }
     clearTimeout(state.idleTimer);
     clearTimeout(state.emptyTimer);
+    sessions.delete(state.guildId);
     state.mixer?.stop();
     state.preparation.close();
-    sessions.delete(state.guildId);
     await quality.release(state.guildId).catch(error => console.warn(`[Música] Limpieza de calidad: ${error.message}`));
     await shoukaku.leaveVoiceChannel(state.guildId).catch(error => console.warn(`[Música] Al salir: ${error.message}`));
   }
@@ -136,24 +154,126 @@ export function createMusic(client) {
     while (track) {
       try {
         const began = performance.now();
-        await state.preparation.prepare(track);
-        if (!state.mixingDisabled) {
-          try { await startMix(state, track); }
-          catch (error) { state.mixingDisabled = true; console.warn(`[AutoMix] ${error.message}; reproducción normal.`); }
-        }
-        if (state.mixingDisabled) {
-          state.streamEncoded = null;
-          await state.player.playTrack({ track: { encoded: track.encoded }, paused: false });
-        }
-        console.log(`[Música] Cambio de canción preparado en ${Math.round(performance.now() - began)}ms.`);
-        prefetch(state);
+        await playCurrent(state);
+        console.log('[Música] Cambio de canción preparado en ' + Math.round(performance.now() - began) + 'ms.');
         return;
       } catch {
         await notify(state, `⚠️ No pude reproducir ${title(track)}. Intentaré la siguiente.`);
         track = state.queue.next('loadFailed');
       }
     }
-    idle(state);
+    checkpoint(state); idle(state);
+  }
+
+  async function connectSession(guild, channel, textChannel, saved = null) {
+    let player;
+    try { player = await shoukaku.joinVoiceChannel({ guildId: guild.id, channelId: channel.id, shardId: guild.shardId, deaf: true }); }
+    catch {
+      await shoukaku.leaveVoiceChannel(guild.id).catch(() => {});
+      throw new Error('No pude entrar al canal de voz. Revisa los permisos y que Lavalink esté actualizado.');
+    }
+    const state = { guildId: guild.id, channelId: channel.id, textChannel: textChannel, player, queue: new MusicQueue(), volume: saved?.volume ?? 50, starting: true, resumePosition: saved?.position || 0, resumePaused: Boolean(saved?.paused), resumeRate: saved?.rate || 1, mixSettings: getMixSettings(guild.id) };
+    state.preparation = new TrackPreparation(player.node, async (node, item) => {
+      await playableTrack(node, item);
+      if (item.filePath) {
+        try { await analyze(item); }
+        catch (error) { console.warn(`[AutoMix] Análisis no disponible: ${error.message}`); }
+      }
+      return item;
+    }, error => console.warn(`[Música] Precarga: ${error.message}`));
+    if (saved) { state.queue.current = saved.current; state.queue.tracks = saved.tracks; state.queue.repeat = saved.repeat; }
+    sessions.set(guild.id, state);
+    try { await synchronizeQuality(state, channel); }
+    catch (error) { await destroy(state, { preserve: Boolean(saved) }); throw error; }
+    console.log('[Música] Conexión de voz preparada.');
+    player.on('start', () => {
+      if (sessions.get(state.guildId) !== state) return;
+      const track = state.queue.current;
+      // Posting the card must not hold up an end/skip event if Discord
+      // is slow: playback and notification have independent lifetimes.
+      if (track) announceTrack(state, track);
+    });
+    player.on('end', data => event(state, async () => {
+      if (!['finished', 'loadFailed', 'stopped'].includes(data.reason)) return;
+      if (state.streamEncoded && data.track?.encoded && data.track.encoded !== state.streamEncoded) return;
+      if (state.mixer) {
+        const mixer = state.mixer;
+        const resumePosition = mixer.current?.track === state.queue.current ? mixer.position : 0;
+        state.mixer = null; state.streamEncoded = null;
+        mixer.stop();
+        if (mixer.finished && !mixer.failure) { state.queue.current = null; checkpoint(state); idle(state); return; }
+        state.mixingDisabled = true;
+        if (state.queue.current) {
+          await notify(state, '⚠️ AutoMix no respondió. Continúo con reproducción normal.');
+          await playCurrent(state, { position: resumePosition, paused: state.player.paused });
+          return;
+        }
+      }
+      await advance(state, data.reason);
+    }));
+    // Lavalink emits loadFailed after a track exception. Advance on end only.
+    player.on('exception', () => event(state, () => state.mixer?.finished ? undefined : notify(state, '⚠️ La fuente no pudo reproducir esta canción. Intentaré la siguiente; si se repite, revisa el registro de Lavalink.')));
+    player.on('stuck', () => event(state, async () => {
+      await notify(state, '⚠️ La canción dejó de responder. La saltaré.');
+      await player.stopTrack();
+    }));
+    player.on('closed', () => event(state, async () => {
+      await destroy(state, { preserve: true, autoResume: false });
+      await notify(state, 'La conexión de voz se cerró. Guardé la cola para recuperarla.');
+    }));
+    try {
+      await player.setGlobalVolume(state.volume);
+      await applyEqualizer(state, getMusicEqualizer(guild.id));
+    }
+    catch { await destroy(state, { preserve: Boolean(saved) }); throw new Error('No pude preparar el reproductor. Vuelve a intentar /play.'); }
+
+    return state;
+  }
+
+  async function playCurrent(state, { position = 0, paused = false, rate = 1 } = {}) {
+    const track = state.queue.current;
+    state.starting = true; state.resumePosition = position; state.resumePaused = paused; state.resumeRate = rate;
+    checkpoint(state);
+    await state.preparation.prepare(track);
+    if (!state.mixingDisabled) {
+      try { await startMix(state, track, { position, paused, rate }); }
+      catch (error) { state.mixingDisabled = true; console.warn('[AutoMix] ' + error.message + '; reproducción normal.'); }
+    }
+    if (state.mixingDisabled) {
+      state.streamEncoded = null;
+      await state.player.playTrack({ track: { encoded: track.encoded }, position: track.info.isStream ? 0 : position, paused });
+    }
+    state.starting = false;
+    checkpoint(state); prefetch(state);
+  }
+
+  async function restoreSession(guild, channel, textChannel, saved) {
+    if (sessions.has(guild.id)) return sessions.get(guild.id);
+    const state = await connectSession(guild, channel, textChannel, saved);
+    try {
+      if (!state.queue.current) state.queue.current = state.queue.tracks.shift() || null;
+      if (!state.queue.current) { await destroy(state); return null; }
+      await playCurrent(state, { position: saved.position, paused: saved.paused, rate: saved.rate });
+      await notify(state, '💾 Recuperé la cola guardada' + (saved.paused ? ' y mantuve la pausa. Usa /continuar cuando quieras.' : ' y retomé la música.'));
+      return state;
+    } catch (error) { await destroy(state, { preserve: true }); throw error; }
+  }
+
+  async function recoverSaved() {
+    if (!recovery || closing || !client.isReady() || !shoukaku.options.nodeResolver(shoukaku.nodes)) return;
+    await Promise.allSettled(sessionStore.list().map(saved => lock.run(saved.guildId, async () => {
+      if (closing || !saved.autoResume || sessions.has(saved.guildId) || !savedSession(saved.guildId)) return;
+      const guild = client.guilds.cache.get(saved.guildId);
+      const channel = guild?.channels.cache.get(saved.voiceChannelId);
+      const listener = channel?.members?.find(member => !member.user.bot);
+      if (!guild?.available || !listener) return;
+      try {
+        const actual = await checkVoice({ guild, user: listener.user }, null, true);
+        if (actual.id !== saved.voiceChannelId) return;
+        const textChannel = saved.textChannelId ? await guild.channels.fetch(saved.textChannelId).catch(() => null) : null;
+        await restoreSession(guild, actual, textChannel, savedSession(saved.guildId));
+      } catch (error) { console.warn('[Recuperación] ' + saved.guildId + ': ' + error.message); }
+    })));
   }
 
   async function checkVoice(interaction, state, joining = false) {
@@ -193,6 +313,17 @@ export function createMusic(client) {
       if (action === 'play') await interaction.editReply({ content: '🎵 Preparando la música…', allowedMentions: { parse: [] } });
       const payload = await lock.run(interaction.guildId, async () => {
         let state = sessions.get(interaction.guildId);
+        const saved = !state ? savedSession(interaction.guildId) : null;
+        if (saved && action === 'cola') return showQueue({ queue: { current: saved.current, tracks: saved.tracks, repeat: saved.repeat } }, interaction.options?.getInteger('pagina') ?? 1);
+        if (saved && action === 'actual') return { content: '💾 Cola guardada. Usa /continuar desde un canal de voz para recuperarla.' };
+        if (saved && action === 'detener') {
+          await checkVoice(interaction, { channelId: saved.voiceChannelId });
+          sessionStore.delete(interaction.guildId); return { content: '⏹️ Borré la cola guardada.' };
+        }
+        if (saved && action === 'continuar') {
+          const channel = await checkVoice(interaction, null, true);
+          state = await restoreSession(interaction.guild, channel, interaction.channel, saved);
+        }
         if (action === 'play') {
           await checkVoice(interaction, state, true);
           console.log('[Música] Canal y permisos comprobados.');
@@ -208,65 +339,9 @@ export function createMusic(client) {
           console.log(`[Música] ${tracks.length} canción(es) encontradas.`);
           const channel = await checkVoice(interaction, state, true);
           if (!state) {
-            let player;
-            try { player = await shoukaku.joinVoiceChannel({ guildId: interaction.guildId, channelId: channel.id, shardId: interaction.guild.shardId, deaf: true }); }
-            catch {
-              await shoukaku.leaveVoiceChannel(interaction.guildId).catch(() => {});
-              throw new Error('No pude entrar al canal de voz. Revisa los permisos y que Lavalink esté actualizado.');
-            }
-            state = { guildId: interaction.guildId, channelId: channel.id, textChannel: interaction.channel, player, queue: new MusicQueue(), volume: 50, mixSettings: getMixSettings(interaction.guildId) };
-            state.preparation = new TrackPreparation(player.node, async (node, item) => {
-              await playableTrack(node, item);
-              if (item.filePath) {
-                try { await analyze(item); }
-                catch (error) { console.warn(`[AutoMix] Análisis no disponible: ${error.message}`); }
-              }
-              return item;
-            }, error => console.warn(`[Música] Precarga: ${error.message}`));
-            sessions.set(interaction.guildId, state);
-            try { await synchronizeQuality(state, channel); }
-            catch (error) { await destroy(state); throw error; }
-            console.log('[Música] Conexión de voz preparada.');
-            player.on('start', () => {
-              if (sessions.get(state.guildId) !== state) return;
-              const track = state.queue.current;
-              // Posting the card must not hold up an end/skip event if Discord
-              // is slow: playback and notification have independent lifetimes.
-              if (track) announceTrack(state, track);
-            });
-            player.on('end', data => event(state, async () => {
-              if (!['finished', 'loadFailed', 'stopped'].includes(data.reason)) return;
-              if (state.streamEncoded && data.track?.encoded && data.track.encoded !== state.streamEncoded) return;
-              if (state.mixer) {
-                const mixer = state.mixer;
-                state.mixer = null; state.streamEncoded = null;
-                mixer.stop();
-                if (mixer.finished && !mixer.failure) { state.queue.current = null; idle(state); return; }
-                state.mixingDisabled = true;
-                if (state.queue.current) {
-                  await notify(state, '⚠️ AutoMix no respondió. Continúo con reproducción normal.');
-                  await state.preparation.prepare(state.queue.current);
-                  await player.playTrack({ track: { encoded: state.queue.current.encoded }, paused: false });
-                  return;
-                }
-              }
-              await advance(state, data.reason);
-            }));
-            // Lavalink emits loadFailed after a track exception. Advance on end only.
-            player.on('exception', () => event(state, () => state.mixer?.finished ? undefined : notify(state, '⚠️ La fuente no pudo reproducir esta canción. Intentaré la siguiente; si se repite, revisa el registro de Lavalink.')));
-            player.on('stuck', () => event(state, async () => {
-              await notify(state, '⚠️ La canción dejó de responder. La saltaré.');
-              await player.stopTrack();
-            }));
-            player.on('closed', () => event(state, async () => {
-              await destroy(state);
-              await notify(state, 'La conexión de voz se cerró. Usa /play para reconectar.');
-            }));
-            try {
-              await player.setGlobalVolume(state.volume);
-              await applyEqualizer(state, getMusicEqualizer(interaction.guildId));
-            }
-            catch { await destroy(state); throw new Error('No pude preparar el reproductor. Vuelve a intentar /play.'); }
+            const saved = savedSession(interaction.guildId);
+            state = saved ? await restoreSession(interaction.guild, channel, interaction.channel, saved)
+              : await connectSession(interaction.guild, channel, interaction.channel);
           }
           state.textChannel = interaction.channel;
           const shuffled = interaction.options.getBoolean('aleatorio') === true;
@@ -349,6 +424,8 @@ export function createMusic(client) {
         }
         throw new Error('Control de música desconocido.');
       });
+      const active = sessions.get(interaction.guildId);
+      if (active) checkpoint(active);
       await interaction.editReply({ ...payload, allowedMentions: { parse: [] } });
       console.log(`[Música] /${action}: completado.`);
     } catch (error) {
@@ -364,7 +441,7 @@ export function createMusic(client) {
     if (!state) return;
     event(state, async () => {
       if (newState.id === client.user.id) {
-        if (!newState.channelId) { await destroy(state); return; }
+        if (!newState.channelId) { await destroy(state, { preserve: true, autoResume: false }); return; }
         state.channelId = newState.channelId;
         const destination = newState.guild.channels.cache.get(state.channelId);
         if (destination) await synchronizeQuality(state, destination);
@@ -375,8 +452,8 @@ export function createMusic(client) {
         state.emptyTimer = setTimeout(() => event(state, async () => {
           const current = newState.guild.channels.cache.get(state.channelId);
           if (current?.members.some(member => !member.user.bot)) return;
-          await destroy(state);
-          await notify(state, '👋 Salí del canal porque ya no quedaban oyentes.');
+          await destroy(state, { preserve: true, autoResume: false });
+          await notify(state, '👋 Salí del canal porque ya no quedaban oyentes. Guardé la cola; usa /continuar para recuperarla.');
         }), 60_000).unref();
       }
     });
@@ -384,6 +461,7 @@ export function createMusic(client) {
 
   client.on('guildDelete', guild => {
     const state = sessions.get(guild.id);
+    if (recovery) sessionStore.delete(guild.id);
     if (state) event(state, () => destroy(state));
   });
 
@@ -403,13 +481,15 @@ export function createMusic(client) {
 
   shoukaku.on('close', () => {
     for (const state of sessions.values()) event(state, async () => {
-      await destroy(state);
-      await notify(state, '⚠️ Se perdió la conexión con el motor de música. Cuando vuelva a estar disponible, usa /play.');
+      await destroy(state, { preserve: true });
+      await notify(state, '⚠️ Se perdió el motor de música. Guardé la cola e intentaré recuperarla al reconectarse.');
     });
   });
 
   return {
     run,
+    checkpoint: checkpointAll,
+    recover: recoverSaved,
     guilds: () => [...client.guilds.cache.values()].map(g => ({ id: g.id, name: g.name })),
     configure: (guildId, patch) => lock.run(guildId, () => configureMix(sessions.get(guildId), guildId, patch)),
     settings: guildId => getMixSettings(guildId),
@@ -421,8 +501,9 @@ export function createMusic(client) {
         automix: state.mixSettings, transition: state.mixer?.lastTransition || null, mixingDisabled: Boolean(state.mixingDisabled) } : null;
     },
     handleButton: interaction => run(interaction, interaction.customId.slice('music:'.length)),
-    close: async () => {
-      await Promise.all([...sessions.values()].map(state => lock.run(state.guildId, () => destroy(state))));
+    close: async ({ preserve = false } = {}) => {
+      closing = true; clearInterval(checkpointTimer); clearInterval(recoveryTimer);
+      await Promise.all([...sessions.values()].map(state => lock.run(state.guildId, () => destroy(state, { preserve }))));
       for (const name of [...shoukaku.nodes.keys()]) shoukaku.removeNode(name);
     }
   };

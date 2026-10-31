@@ -49,9 +49,10 @@ export async function resolveTracks(node, value) {
 export async function playableTrack(node, track, loadAudio = localAudio) {
   if (track.localAudio) return track;
   if (track.encoded && track.info.sourceName !== 'youtube' && track.info.sourceName !== 'spotify') return track;
-  if (track.encoded && track.info.sourceName === 'youtube') {
-    track.encoded = await loadAudio(node, track.info);
-    track.filePath = track.info.localPath;
+  if (track.audioInfo || (track.info.sourceName === 'youtube' && /^[a-zA-Z0-9_-]{11}$/.test(track.info.identifier || ''))) {
+    const info = track.audioInfo || track.info;
+    track.encoded = await loadAudio(node, info);
+    track.filePath = info.localPath;
     track.localAudio = true;
     return track;
   }
@@ -60,6 +61,7 @@ export async function playableTrack(node, track, loadAudio = localAudio) {
   // Prefer a version close in duration; fall back to the top search result.
   const candidates = result.data.slice(0, 5);
   const match = candidates.find(item => !item.info.isStream && Math.abs(item.info.length - track.info.length) < 12_000) || candidates[0];
+  track.audioInfo = { ...match.info };
   track.encoded = await loadAudio(node, match.info);
   track.filePath = match.info.localPath;
   track.localAudio = true;

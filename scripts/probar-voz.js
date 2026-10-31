@@ -6,7 +6,7 @@ import { config } from '../src/config.js';
 import { createMusic } from '../src/music/index.js';
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
-const music = createMusic(client);
+const music = createMusic(client, { recovery: false });
 const transitions = process.argv.includes('--transiciones');
 const equalizerTest = process.argv.includes('--ecualizador');
 const automixTest = process.argv.includes('--automix');

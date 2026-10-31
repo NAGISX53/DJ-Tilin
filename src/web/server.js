@@ -11,6 +11,8 @@ const app = express();
 let discordStatus = () => false;
 let musicStatus = () => false;
 let musicControl;
+let shutdownHandler;
+export function setShutdownHandler(handler) { shutdownHandler = handler; }
 export function setMusicControl(control) { musicControl = control; }
 export function setDiscordStatusProvider(provider) { discordStatus = provider; }
 export function setMusicStatusProvider(provider) { musicStatus = provider; }
@@ -39,6 +41,16 @@ app.get('/auth/local', (req, res) => {
   sessions.set(sid, { id: config.discord.ownerId, username: 'Administrador local', expires: Date.now() + 8 * 60 * 60 * 1000 });
   res.cookie('tilin_session', sid, { httpOnly: true, sameSite: 'lax', maxAge: 8 * 60 * 60 * 1000 });
   res.redirect('/');
+});
+
+// Only the local owner capability may request an orderly shutdown.
+app.post('/internal/shutdown', (req, res) => {
+  const loopback = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
+  const key = (req.get('authorization') || '').replace(/^Bearer /, '');
+  if (!loopback || !/^[a-f0-9]{64}$/.test(key) || !crypto.timingSafeEqual(Buffer.from(key), Buffer.from(localKey))) return res.sendStatus(403);
+  if (!shutdownHandler) return res.sendStatus(503);
+  res.json({ ok: true });
+  setImmediate(() => void shutdownHandler());
 });
 
 function sessionUser(req) {
