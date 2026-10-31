@@ -164,7 +164,8 @@ export class MixSession {
       this.fade = { outgoing, frame: 0, total: Math.max(1, Math.round(duration / 0.02)) };
     } else outgoing?.decoder.stop();
     this.lastTransition = { type: selectedPlan.type, seconds: duration, rate: this.current.rate,
-      bpm: track.analysis?.bpm || null, confidence: track.analysis?.confidence || 0, fallback: selectedPlan.fallback };
+      bpm: track.analysis?.bpm || null, confidence: track.analysis?.confidence || 0, fallback: selectedPlan.fallback,
+      harmonic:selectedPlan.harmonic,energyDifference:selectedPlan.energyDifference,adjustment:selectedPlan.adjustment };
     this.onTrack?.(track, this.lastTransition);
     return true;
   }

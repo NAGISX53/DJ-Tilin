@@ -1,4 +1,5 @@
 import { transitionPlan } from './transition.js';
+import { harmonicRelation, energyDifference } from './spectral.js';
 
 export const MIX_LOOKAHEAD = 6;
 
@@ -20,12 +21,15 @@ export function bestNext(current, candidates, settings, rate = 1, ready = () => 
   for (const track of candidates) {
     if (!ready(track) || !track.analysis) continue;
     const plan = transitionPlan(current.analysis, track.analysis, settings, rate);
-    if (!['smart', 'dj'].includes(plan.type) || plan.fallback) continue;
+    const harmony=harmonicRelation(current.analysis.key,track.analysis.key);
+    const energy=energyDifference(current.analysis.energy,track.analysis.energy);
+    const reliable=current.analysis.confidence>=0.3&&track.analysis.confidence>=0.3&&current.analysis.bpm>0&&track.analysis.bpm>0;
+    if ((!['smart', 'dj'].includes(plan.type) || plan.fallback) && (reliable || harmony.kind==='unknown'&&energy===null)) continue;
     const target = current.analysis.bpm * rate;
-    const difference = Math.min(...[0.5, 1, 2].map(scale => Math.abs(target / (track.analysis.bpm * scale) - 1)));
+    const difference = reliable?Math.min(...[0.5, 1, 2].map(scale => Math.abs(target / (track.analysis.bpm * scale) - 1))):0.08;
     const loudness = !settings.normalize && Number.isFinite(current.analysis.loudness) && Number.isFinite(track.analysis.loudness)
       ? Math.min(12, Math.abs(current.analysis.loudness - track.analysis.loudness)) * 0.002 : 0;
-    const score = difference + (1 - Math.min(1, track.analysis.confidence)) * 0.01 + loudness;
+    const score = difference + (1 - Math.min(1, track.analysis.confidence || 0)) * 0.01 + loudness+harmony.cost+(energy===null?0.04:energy*0.16);
     if (score < bestScore) { best = track; bestScore = score; }
   }
   return best;

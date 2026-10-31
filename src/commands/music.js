@@ -36,6 +36,7 @@ export const musicCommands = [
   command('detener', 'Detiene la música, vacía la cola y sale del canal.'),
   command('reproductor', 'Muestra o mueve el reproductor fijo a este canal.'),
   command('actual', 'Muestra la canción actual y el progreso.'),
+  command('analisis', 'Muestra ritmo, tonalidad y energía estimados para AutoMix.'),
   command('calidad', 'Muestra el bitrate disponible y la calidad de audio del bot.'),
   command('automix', 'Configura transiciones, mezcla inteligente y DJ automático.', data => data
     .addStringOption(o => o.setName('modo').setDescription('Modo de reproducción').addChoices(

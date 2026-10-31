@@ -6,8 +6,8 @@ import path from 'node:path';
 import { MixSession, wavHeader } from '../src/music/mixer.js';
 import { DEFAULT_MIX } from '../src/music/mix-settings.js';
 
-async function fixture(file, frequency) {
-  const samples = 48000;
+async function fixture(file, frequency, seconds=1) {
+  const samples = 48000*seconds;
   const data = Buffer.alloc(samples * 4);
   for (let i = 0; i < samples; i++) {
     const left = Math.round(Math.sin(i * 2 * Math.PI * frequency / 48000) * 12000);
@@ -16,6 +16,21 @@ async function fixture(file, frequency) {
   const header = wavHeader(); header.writeUInt32LE(data.length + 36, 4); header.writeUInt32LE(data.length, 40);
   await writeFile(file, Buffer.concat([header, data]));
 }
+
+test('mezcla real de tonalidades distantes acorta el solapamiento y conserva el límite de picos',async()=>{
+  const directory=await mkdtemp(path.join(tmpdir(),'tilin-harmony-'));let session;
+  try{
+    const files=[path.join(directory,'c.wav'),path.join(directory,'fs.wav')];
+    await Promise.all([fixture(files[0],261.63,12),fixture(files[1],369.99,12)]);
+    const tracks=files.map((filePath,i)=>({filePath,info:{length:12000},analysis:{duration:12,intro:0,outro:12,bpm:120,confidence:.9,beatOffset:0,energy:.6,key:{tonic:i?6:0,mode:'major',confidence:.9}}}));
+    let calls=0;const transitions=[];
+    session=new MixSession({track:tracks[0],settings:{...DEFAULT_MIX,mode:'dj'},pace:false,peek:()=>calls?null:tracks[1],ready:()=>true,prepare:async()=>{},next:()=>++calls===1?tracks[1]:null,onTrack:(_,plan)=>transitions.push(plan)});
+    const url=await session.url();session.activate();const result=Buffer.from(await fetch(url).then(r=>r.arrayBuffer()));
+    const seconds=(result.length-44)/(48000*4);assert(seconds>20.8&&seconds<21.2,String(seconds));
+    assert.equal(transitions[0].harmonic,'distant');assert(transitions[0].seconds<=3);assert(transitions[0].adjustment);
+    for(let i=44;i<result.length;i+=2)assert(Math.abs(result.readInt16LE(i))<=Math.ceil(.9*32767));
+  }finally{session?.stop();await new Promise(resolve=>setTimeout(resolve,100));await rm(directory,{recursive:true,force:true});}
+});
 
 for (const mode of ['normal', 'crossfade', 'smart', 'dj']) test(`mezcla real ${mode}: cola, solapamiento y sondeo sin consumir canciones`, async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'tilin-mixer-'));

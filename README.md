@@ -47,7 +47,7 @@ npm test y npm run check. No publiques .env, datos, runtime o claves del panel.
 
 
 ## Playlists aleatorias compatibles con AutoMix
-Usa /play busqueda:ENLACE aleatorio:true con una playlist pública de YouTube o Spotify. La primera canción se elige al azar y se baraja únicamente el nuevo bloque agregado, respetando la cola previa. En Smart Mix y DJ, con sincronización activada, se analizan anticipadamente hasta seis candidatas del mismo bloque y se elige una transición compatible por BPM (considerando mitad/doble tempo), confianza y, sin normalización, cercanía de sonoridad. Se usa el tempo efectivo de la canción saliente. Si no hay un ritmo fiable/compatible disponible, conserva el orden aleatorio y el fundido de respaldo. No identifica tonalidades ni garantiza la mejor transición de toda la playlist.
+Usa /play busqueda:ENLACE aleatorio:true con una playlist pública de YouTube o Spotify. La primera canción se elige al azar y se baraja únicamente el nuevo bloque agregado, respetando la cola previa. En Smart Mix y DJ, con sincronización activada, se analizan anticipadamente hasta seis candidatas del mismo bloque y se elige una transición compatible por BPM (considerando mitad/doble tempo), confianza, tonalidad y energía estimadas y, sin normalización, cercanía de sonoridad. Se usa el tempo efectivo de la canción saliente. Sin ritmo fiable todavía puede usar tonalidad o energía si están disponibles; sin datos útiles conserva el orden aleatorio y el fundido de respaldo. No garantiza la mejor transición de toda la playlist.
 
 Sin aleatorio:true se respeta el orden original. /mezclar baraja toda la cola pendiente y permite esta selección inteligente. Normal, Crossfade o sincronizar:false mantienen el orden barajado. /cola muestra el orden provisional; AutoMix puede ajustar la siguiente cuando termine el análisis. Repetir canción conserva la actual; saltar la omite. Cada canción permanece en la cola hasta consumirse o quitarse, incluido si el mismo título aparece varias veces. Se mantiene el límite de 200 pendientes y la advertencia de listas Spotify parcialmente disponibles.
 
@@ -116,4 +116,16 @@ Con un rol configurado, quienes lo tienen y quienes administran el servidor pued
 
 Los votos se reinician por canción, incluso al repetir, y tras reiniciar el bot. Se retiran los votos de quienes salen y se vuelve a comprobar la mayoría al cambiar los oyentes. La configuración se guarda por servidor. Si se elimina el rol, Administrar servidor permite corregirlo. El panel local conserva su autorización independiente de propietario/usuarios autorizados.
 
-Paso 5: 104 pruebas aprobadas; pendiente de prueba del usuario en Discord.
+Paso 5 verificado por el usuario: funcionan los permisos del rol DJ y los votos para saltar.
+
+## Análisis musical avanzado — paso 6
+
+El análisis local añade tonalidad mayor/menor e intensidad estimadas al BPM, silencios y sonoridad existentes. `/analisis` muestra la canción actual, la siguiente candidata y la transición prevista; el reproductor también muestra los datos disponibles. La siguiente candidata puede cambiar al terminar la precarga.
+
+En playlists aleatorias, Smart Mix y DJ con sincronización activada valoran entre hasta seis candidatas preparadas: misma tonalidad, relativa mayor/menor o vecina en el círculo de quintas, energía parecida y tempo compatible. Las peticiones manuales conservan su posición. Una tonalidad incierta no se usa para decidir compatibilidad. El fundido se limita a tres segundos cuando las tonalidades detectadas están alejadas o la diferencia estimada de energía es grande. Normal y Crossfade mantienen su comportamiento. No hay transposición de notas; DJ mantiene su ajuste de tempo existente.
+
+El espectro se procesa en un worker, con hasta 96 ventanas mono de 8192 muestras a 11025 Hz, espaciadas según la duración conocida (mínimo dos segundos). Si falta la duración, se muestrean los primeros minutos. La correlación de cromas utiliza perfiles Krumhansl-Schmuckler y descarta resultados ambiguos; no es un análisis musical certificado. Energía es un índice heurístico 0–100 que combina brillo, actividad de la envolvente y compresión, no una medida de volumen ni un dato de Spotify. El cálculo tonal se serializa, tiene tiempo límite y admite respaldo sin tonalidad. Caché v4 para regenerar análisis anteriores.
+
+Referencia del método de correlación: [documentación oficial de Key en Essentia](https://essentia.upf.edu/reference/std_Key.html). La implementación FFT/cromas es independiente y no añade Essentia como dependencia.
+
+Paso 6: 114 pruebas aprobadas, incluidos FFmpeg, worker, caché, progresiones mayores/menores, selección y mezcla real con límites de pico. Pendiente de prueba de escucha del usuario.

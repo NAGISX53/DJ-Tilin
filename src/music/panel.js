@@ -1,5 +1,6 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, EmbedBuilder, escapeMarkdown } from 'discord.js';
 import { EQ_NAMES } from './equalizer.js';
+import { analysisDescription } from './spectral.js';
 import { MIX_MODES } from './mix-settings.js';
 const safe = (value, max = 160) => escapeMarkdown(String(value || 'Desconocido').slice(0,max));
 const time = ms => { const seconds=Math.max(0,Math.floor((ms || 0)/1000));return Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0'); };
@@ -35,9 +36,10 @@ export function renderPanel(state, phase='playing') {
     {name:'Repetición',value:({off:'Desactivada',track:'Esta canción',queue:'Toda la cola'})[state.queue.repeat],inline:true},
     {name:'AutoMix',value:MIX_MODES[state.mixSettings.mode]+' · '+state.mixSettings.seconds+' s',inline:true},
     {name:'Audio',value:(state.quality?state.quality.bitrate/1000+' kbps · ':'')+(EQ_NAMES[state.equalizer] || EQ_NAMES.equilibrado),inline:true});
+  if(current?.analysis)embed.addFields({name:'Análisis estimado',value:analysisDescription(current.analysis)});
   const transition=state.panelTransition || state.mixer?.lastTransition;
   if(state.djSettings?.roleId)embed.addFields({name:'Controles DJ',value:'<@&'+state.djSettings.roleId+'> · '+(state.djSettings.voting?'Votos para saltar: '+(state.skipTally?.count || 0)+'/'+(state.skipTally?.needed || 1):'Votación desactivada')});
-  if(transition)embed.addFields({name:'Última mezcla',value:safe(transition.fallback || transition.type+' · '+transition.seconds.toFixed(1)+' s',250)});
+  if(transition)embed.addFields({name:'Última mezcla',value:safe(transition.fallback || transition.adjustment || transition.type+' · '+transition.seconds.toFixed(1)+' s',250)});
   embed.setFooter({text:(state.guildName || 'Música del servidor')+' · Progreso actualizado cada 15 s'+(saved?' · Usa Recuperar cola o /continuar':'')});
   const rows=[new ActionRowBuilder().addComponents(
     button(saved?'continuar':'toggle',saved?'Recuperar cola':paused?'▶ Continuar':'Ⅱ Pausa',stopped||(!current&&!saved),ButtonStyle.Primary),

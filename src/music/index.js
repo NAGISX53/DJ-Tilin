@@ -17,6 +17,9 @@ import { MusicPanels } from './panel.js';
 import { SearchPicks, searchTracks, searchPayload } from './search.js';
 import { SkipVotes, managesMusic, controlsMusic, isDjControl } from './dj.js';
 import { djSettings } from '../db.js';
+import { bestNext } from './ordering.js';
+import { analysisDescription } from './spectral.js';
+import { transitionPlan } from './transition.js';
 import { MIX_MODES } from './mix-settings.js';
 
 const safe = text => escapeMarkdown(String(text || 'Desconocido').slice(0, 130));
@@ -514,6 +517,17 @@ export function createMusic(client, { recovery = true, panelStorage = panelStore
         if (action === 'calidad') {
           const settings = state.quality;
           return { content: `🎧 **Calidad de música**\nMáximo del servidor: **${settings.maximum / 1000} kbps**\nCanal y emisión del bot: **${settings.bitrate / 1000} kbps**\nOpus · estéreo · 48 kHz\nEcualizador: ${EQ_NAMES[state.equalizer]}\nVolumen del bot: ${state.volume}%. El volumen personal de Discord es independiente.${!settings.canManage ? '\nNo tengo permiso para subir el bitrate del canal; utilizo su configuración actual.' : ''}` };
+        }
+        if (action === 'analisis') {
+          if(!state.queue.current)throw Error('No hay una canción sonando.');
+          const current=state.queue.current;
+          const next=state.queue.repeat==='track'?current:(state.queue.tracks[0]?.shuffleGroup?bestNext(current,state.queue.candidates(state.mixSettings),state.mixSettings,state.mixer?.current?.rate || 1,item=>state.preparation.ready.has(item)):null) || state.queue.tracks[0] || (state.queue.repeat==='queue'?current:null);
+          const plan=next?transitionPlan(current.analysis,next.analysis,state.mixSettings,state.mixer?.current?.rate || 1):null;
+          const details=analysisDescription(current.analysis)+(current.analysis?.key?' · Confianza tonal '+(current.analysis.key.confidence>=0.7?'alta':'media'):'');
+          return {embeds:[new EmbedBuilder().setColor('#9ACCF0').setTitle('🎼 Análisis musical estimado').setDescription(title(current)+'\n'+details)
+            .addFields({name:'Siguiente candidata',value:next?title(next)+'\n'+analysisDescription(next.analysis):'No hay canciones pendientes.'},
+              {name:'Transición prevista',value:plan?MIX_MODES[plan.type]+' · '+plan.seconds.toFixed(1)+' s'+(plan.fallback?'\n'+plan.fallback:'')+(plan.adjustment?'\n'+plan.adjustment:''):'Sin siguiente canción.'})
+            .setFooter({text:'Estimaciones locales; no son datos oficiales. La selección compatible se aplica a colas aleatorias en Smart Mix / DJ con sincronización activada.'})]};
         }
         if (action === 'actual') {
           if (!state.queue.current) throw new Error('No hay una canción sonando.');

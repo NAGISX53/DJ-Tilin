@@ -12,7 +12,7 @@
 - Playlists aleatorias con /play aleatorio:true; selección de la siguiente entre hasta seis candidatas compatibles para AutoMix.
 - 41 pruebas automatizadas y comprobación de configuración/sintaxis/comandos.
 
-Los fallos de análisis usan fundido sencillo; los fallos del mezclador tienen reproducción normal de respaldo. La selección musical es heurística, sin análisis de tonalidad.
+Los fallos de análisis usan fundido sencillo; los fallos del mezclador tienen reproducción normal de respaldo. La selección musical inicial es heurística; la sexta mejora incorpora tonalidad estimada.
 
 ## Instalación en varios servidores
 
@@ -54,9 +54,19 @@ Los fallos de análisis usan fundido sencillo; los fallos del mezclador tienen r
 - Persistencia en SQLite, aislamiento por usuario, protección frente a reemplazos accidentales y límites de capacidad.
 - 94 pruebas aprobadas y favoritos/playlists confirmados por el usuario.
 
-## Rol DJ y votación — quinta mejora pendiente de verificación en Discord
+## Rol DJ y votación — quinta mejora verificada
 
 - Configuración persistente por servidor con /dj configurar, estado y desactivar; controles abiertos de forma predeterminada.
 - Permisos musicales comunes para comandos y botones, con acceso de Administración del servidor.
 - Saltos por mayoría estricta de oyentes humanos, votos únicos por canción, limpieza al salir y protección frente a saltos duplicados.
 - Panel con rol y progreso de votos; 104 pruebas aprobadas, incluida la autorización del router real.
+
+- El usuario confirmó que funcionan los permisos DJ y la votación.
+
+## Análisis musical — sexta mejora en validación
+
+- Tonalidad y energía estimadas con análisis espectral en worker y caché v4.
+- Selección de candidatas por ritmo, compatibilidad armónica y cercanía de energía.
+- Solapamientos breves ante tonalidades alejadas o cambios grandes de energía.
+- /analisis y datos estimados en el reproductor; 20 comandos y 114 pruebas aprobadas.
+- Sin cambios de orden para peticiones manuales; respaldo si el análisis es incierto o falla.

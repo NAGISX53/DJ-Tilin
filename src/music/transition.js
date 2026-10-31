@@ -1,4 +1,11 @@
+import { harmonicRelation, energyDifference } from './spectral.js';
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+function musicalPlan(plan,current,next) {
+  const harmony=harmonicRelation(current?.key,next?.key),energy=energyDifference(current?.energy,next?.energy);
+  const adjustment=harmony.kind==='distant'?'Tonalidades alejadas: solapamiento breve.':energy!==null&&energy>0.38?'Cambio grande de energía: solapamiento breve.':null;
+  return {...plan,harmonic:harmony.kind,energyDifference:energy,adjustment,seconds:adjustment?Math.min(3,plan.seconds):plan.seconds};
+}
 
 export function transitionPlan(current, next, settings, currentRate = 1) {
   if (settings.mode === 'normal') return { type: 'normal', seconds: 0, incomingRate: 1, cue: 0, fallback: null };
@@ -6,14 +13,14 @@ export function transitionPlan(current, next, settings, currentRate = 1) {
   let plan = { type: 'crossfade', seconds: Math.max(0.1, duration), incomingRate: 1, cue: 0, fallback: null };
   if (settings.mode === 'crossfade') return plan;
   plan.cue = next?.intro || 0;
-  if (!settings.syncBpm) return { ...plan, type: 'smart', fallback: settings.mode === 'dj' ? 'Sincronización BPM desactivada: transición por energía.' : null };
+  if (!settings.syncBpm) return musicalPlan({ ...plan, type: 'smart', fallback: settings.mode === 'dj' ? 'Sincronización BPM desactivada: transición por energía.' : null },current,next);
   const reliable = current?.confidence >= 0.3 && next?.confidence >= 0.3 && current.bpm && next.bpm;
-  if (!reliable) return { ...plan, fallback: 'Ritmo poco claro: fundido sencillo.' };
+  if (!reliable) return musicalPlan({ ...plan, fallback: 'Ritmo poco claro: fundido sencillo.' },current,next);
   const target = current.bpm * currentRate;
   const candidates = [next.bpm / 2, next.bpm, next.bpm * 2];
   const bpm = candidates.reduce((best, value) => Math.abs(value - target) < Math.abs(best - target) ? value : best);
   const ratio = target / bpm;
-  if (Math.abs(ratio - 1) > 0.08) return { ...plan, fallback: 'Ritmos poco compatibles: fundido sencillo.' };
+  if (Math.abs(ratio - 1) > 0.08) return musicalPlan({ ...plan, fallback: 'Ritmos poco compatibles: fundido sencillo.' },current,next);
   plan.type = settings.mode === 'dj' && settings.syncBpm ? 'dj' : 'smart';
   if (plan.type === 'dj') plan.incomingRate = clamp(ratio, 0.92, 1.08);
   // Favor a musical bar length without allowing excessively long overlaps.
@@ -25,7 +32,7 @@ export function transitionPlan(current, next, settings, currentRate = 1) {
   const cueTime = plan.cue / plan.incomingRate;
   const aligned = phase + Math.ceil((cueTime - phase) / period) * period;
   plan.cue = Math.max(plan.cue, aligned * plan.incomingRate);
-  return plan;
+  return musicalPlan(plan,current,next);
 }
 
 // Equal-power blend with a short, linked stereo peak limiter. No hard clipping.
